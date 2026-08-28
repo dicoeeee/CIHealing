@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "CI 自愈评测方法论 V1｜方案评审版",
+    "output": "99_Attachments/CI 自愈/CI 自愈评测方法论 V1.html",
+    "animation": "none",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "evaluation_main", "label": "01 / 自动评测主线" },
+    { "id": "supporting_path", "label": "02 / 可选证据与后续治理", "variant": "exception" }
+  ],
+  "phases": [
+    {
+      "id": "evaluation_phase",
+      "label": "成功修复 → 两层门禁 → 逐维度判断 → 自动三态结论",
+      "fromCol": 0,
+      "toCol": 5,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "repair_ready",
+    "admission_gate",
+    "evidence_bundle",
+    "dimension_gate",
+    "auto_aggregation",
+    "final_verdict"
+  ],
+  "nodes": [
+    {
+      "id": "repair_ready",
+      "lane": "evaluation_main",
+      "col": 0,
+      "type": "backend",
+      "label": "成功修复",
+      "sublabel": "原失败 + 全量 CI 通过",
+      "tag": "准入前提",
+      "width": 90
+    },
+    {
+      "id": "admission_gate",
+      "lane": "evaluation_main",
+      "col": 1,
+      "type": "security",
+      "label": "准入",
+      "sublabel": "补丁 + 回执",
+      "width": 50
+    },
+    {
+      "id": "evidence_bundle",
+      "lane": "evaluation_main",
+      "col": 2,
+      "type": "database",
+      "label": "证据",
+      "sublabel": "基础 + 增强",
+      "width": 50
+    },
+    {
+      "id": "dimension_gate",
+      "lane": "evaluation_main",
+      "col": 3,
+      "type": "backend",
+      "label": "维度",
+      "sublabel": "3・3・2",
+      "width": 40
+    },
+    {
+      "id": "auto_aggregation",
+      "lane": "evaluation_main",
+      "col": 4,
+      "type": "security",
+      "label": "聚合",
+      "sublabel": "冲突优先",
+      "width": 40
+    },
+    {
+      "id": "final_verdict",
+      "lane": "evaluation_main",
+      "col": 5,
+      "type": "messagebus",
+      "label": "三态结论",
+      "sublabel": "准确・不准确・无法判断",
+      "width": 96
+    },
+    {
+      "id": "human_normalization",
+      "lane": "supporting_path",
+      "col": 1,
+      "type": "external",
+      "label": "人工修复归一化",
+      "sublabel": "修复 / 重构 / 新需求",
+      "width": 104
+    },
+    {
+      "id": "enhanced_evidence",
+      "lane": "supporting_path",
+      "col": 3,
+      "type": "database",
+      "label": "增强证据",
+      "sublabel": "关系 / 判据",
+      "width": 86
+    },
+    {
+      "id": "optional_governance",
+      "lane": "supporting_path",
+      "col": 5,
+      "type": "external",
+      "label": "可选治理",
+      "sublabel": "仲裁 / 独立抽检",
+      "width": 90
+    }
+  ],
+  "edges": [
+    { "from": "repair_ready", "to": "admission_gate", "role": "main", "variant": "emphasis" },
+    { "from": "admission_gate", "to": "evidence_bundle", "role": "main" },
+    { "from": "evidence_bundle", "to": "dimension_gate", "label": "逐维度门禁", "role": "main", "variant": "emphasis" },
+    { "from": "dimension_gate", "to": "auto_aggregation", "role": "main" },
+    { "from": "auto_aggregation", "to": "final_verdict", "role": "main", "variant": "emphasis" },
+    { "from": "human_normalization", "to": "evidence_bundle", "role": "branch", "variant": "dashed" },
+    { "from": "enhanced_evidence", "to": "dimension_gate", "role": "branch", "variant": "dashed" },
+    { "from": "final_verdict", "to": "optional_governance", "role": "branch", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "证据可得性与两层门禁",
+      "items": [
+        "易：失败・基线代码・AI 修复・验证；原始人工提交也容易获取",
+        "难：调用链・动态依赖・跨仓关系・正确性判据",
+        "人工归一化中难；证据缺失只影响依赖维度｜案例准入 + 逐维度门禁"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "内部 3 + 3 + 2 评测结构",
+      "items": [
+        "必选 3：失败对齐・因果有效性・行为一致性",
+        "条件 3：已知影响完整性・门禁完整性・显式约束",
+        "风险 2：修改范围・已知回归｜AI 自述与 CI 通过不是正确性证明"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "三态自动聚合与交付边界",
+      "items": [
+        "存在决定性冲突 → 不准确",
+        "必选维度 + 适用条件维度全部支持 → 准确",
+        "无冲突但关键证据不足 → 无法判断｜不平均、不投票、不交由人工组合"
+      ]
+    }
+  ]
+}

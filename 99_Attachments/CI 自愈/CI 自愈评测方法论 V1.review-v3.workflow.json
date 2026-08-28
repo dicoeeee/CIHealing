@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "CI 自愈评测方法论 V1｜维度展开评审版",
+    "output": "99_Attachments/CI 自愈/CI 自愈评测方法论 V1.html",
+    "animation": "none",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "backend": { "label": "评测判断" },
+        "security": { "label": "条件与风险门禁" },
+        "messagebus": { "label": "最终结论" },
+        "external": { "label": "人工参考与治理" }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "evaluation_main",
+      "label": "自动评测主线｜两个必选维度每个案例均分析"
+    },
+    {
+      "id": "conditional_dimensions",
+      "label": "条件维度｜满足触发条件才参与聚合"
+    },
+    {
+      "id": "risk_checks",
+      "label": "辅助风险｜记录信号并向对应维度转交证据"
+    },
+    {
+      "id": "reference_and_governance",
+      "label": "人工参考证据与后续治理",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "admission_and_evidence",
+      "label": "准入与证据",
+      "fromCol": 0,
+      "toCol": 0,
+      "variant": "default"
+    },
+    {
+      "id": "dimension_evaluation",
+      "label": "维度展开与证据门禁",
+      "fromCol": 1,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "aggregation_and_delivery",
+      "label": "冲突优先聚合与三态交付",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "repair_ready",
+    "failure_repair_consistency",
+    "expected_behavior_consistency",
+    "final_verdict"
+  ],
+  "nodes": [
+    {
+      "id": "repair_ready",
+      "lane": "evaluation_main",
+      "col": 0,
+      "type": "backend",
+      "label": "已准入案例",
+      "sublabel": "成功回执 + 基础证据",
+      "tag": "Self-Healing 已修绿",
+      "width": 96
+    },
+    {
+      "id": "failure_repair_consistency",
+      "lane": "evaluation_main",
+      "col": 1,
+      "type": "backend",
+      "label": "故障—修复一致性",
+      "sublabel": "失败证据 ↔ AI Patch 语义",
+      "tag": "不证明环境因果",
+      "width": 110
+    },
+    {
+      "id": "expected_behavior_consistency",
+      "lane": "evaluation_main",
+      "col": 3,
+      "type": "backend",
+      "label": "预期行为一致性",
+      "sublabel": "Patch 行为 ↔ 可信预期",
+      "tag": "不要求实现相同",
+      "width": 104
+    },
+    {
+      "id": "final_verdict",
+      "lane": "evaluation_main",
+      "col": 5,
+      "type": "messagebus",
+      "label": "自动三态结论",
+      "sublabel": "准确・不准确・无法判断",
+      "tag": "不平均・不投票",
+      "width": 104
+    },
+    {
+      "id": "known_scope_completeness",
+      "lane": "conditional_dimensions",
+      "col": 1,
+      "type": "security",
+      "label": "已知影响范围",
+      "sublabel": "调用方・依赖・必要配套修改",
+      "tag": "条件维度 1",
+      "width": 104
+    },
+    {
+      "id": "guard_integrity",
+      "lane": "conditional_dimensions",
+      "col": 3,
+      "type": "security",
+      "label": "校验与门禁完整性",
+      "sublabel": "测试・断言・扫描・CI 门禁",
+      "tag": "条件维度 2",
+      "width": 118
+    },
+    {
+      "id": "explicit_constraint_compliance",
+      "lane": "conditional_dimensions",
+      "col": 5,
+      "type": "security",
+      "label": "显式约束遵循",
+      "sublabel": "接口・安全・仓库与发布规则",
+      "tag": "条件维度 3",
+      "width": 104
+    },
+    {
+      "id": "scope_risk",
+      "lane": "risk_checks",
+      "col": 1,
+      "type": "backend",
+      "label": "修改范围风险",
+      "sublabel": "文件・行数・目录跨度",
+      "tag": "只产生风险信号",
+      "width": 104
+    },
+    {
+      "id": "known_regression_conflict",
+      "lane": "risk_checks",
+      "col": 3,
+      "type": "backend",
+      "label": "已知回归冲突",
+      "sublabel": "明确回归可形成决定性错误证据",
+      "tag": "缺证据不单独阻断",
+      "width": 110
+    },
+    {
+      "id": "raw_human_change",
+      "lane": "reference_and_governance",
+      "col": 0,
+      "type": "external",
+      "label": "原始人工提交",
+      "sublabel": "混入重构・新需求",
+      "tag": "容易获取",
+      "width": 96
+    },
+    {
+      "id": "human_normalization",
+      "lane": "reference_and_governance",
+      "col": 2,
+      "type": "external",
+      "label": "人工修复归一化",
+      "sublabel": "机制・行为・配套・门禁",
+      "tag": "跨维度参考证据",
+      "width": 112
+    },
+    {
+      "id": "optional_governance",
+      "lane": "reference_and_governance",
+      "col": 5,
+      "type": "external",
+      "label": "可选后续治理",
+      "sublabel": "人工仲裁・独立抽检",
+      "tag": "不覆盖自动结论",
+      "width": 104
+    }
+  ],
+  "edges": [
+    {
+      "from": "repair_ready",
+      "to": "failure_repair_consistency",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "from": "failure_repair_consistency",
+      "to": "expected_behavior_consistency",
+      "label": "两个必选维度",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "from": "expected_behavior_consistency",
+      "to": "final_verdict",
+      "label": "冲突优先聚合",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "from": "known_scope_completeness",
+      "to": "guard_integrity",
+      "label": "适用时分析",
+      "role": "branch",
+      "variant": "dashed"
+    },
+    {
+      "from": "guard_integrity",
+      "to": "explicit_constraint_compliance",
+      "role": "branch",
+      "variant": "dashed"
+    },
+    {
+      "from": "scope_risk",
+      "to": "known_regression_conflict",
+      "label": "两个辅助检查",
+      "role": "branch",
+      "variant": "dashed"
+    },
+    {
+      "from": "raw_human_change",
+      "to": "human_normalization",
+      "label": "剥离噪声",
+      "role": "branch",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "两个必选维度｜每个案例均需结论",
+      "items": [
+        "故障—修复一致性：失败证据、相关机制与 AI Patch 形成可解释语义链；不判断环境复现，也不证明运行时因果",
+        "明确与失败证据冲突，或通过绕过、吞错、跳过、修改退出状态遮蔽原失败 → 冲突",
+        "预期行为一致性：AI Patch 行为与契约、未修改的定向测试、归一化人工修复或可验证不变量一致",
+        "无可信预期行为依据，或不同依据相互冲突 → 无法判断"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "三个条件维度｜满足触发条件才参与",
+      "items": [
+        "已知影响范围：公共接口、共享代码、依赖或明确调用方变化时，检查必要配套修改",
+        "校验与门禁：测试、断言、异常处理、扫描或 CI 门禁被修改时，检查校验能力是否降低",
+        "显式约束：涉及接口、安全、仓库策略、构建与发布规则时，检查适用规则是否满足",
+        "不适用不参与聚合；适用但证据不足 → 无法判断"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "风险、人工参考与三态聚合",
+      "items": [
+        "修改范围只产生风险信号；明确回归冲突可以形成决定性错误证据，缺少额外回归证据不单独阻断",
+        "人工提交先剥离重构、新需求和无关修改，再将机制、行为、配套与门禁信息分别送入对应维度",
+        "AI 与人工实现不同不自动构成冲突；人工参考不是独立维度，也不是唯一正确答案",
+        "任一决定性冲突 → 不准确；全部必选及适用条件维度支持 → 准确；其余 → 无法判断"
+      ]
+    }
+  ]
+}

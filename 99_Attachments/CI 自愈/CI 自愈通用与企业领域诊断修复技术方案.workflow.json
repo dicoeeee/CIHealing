@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "CI 自愈通用与企业领域诊断修复技术方案",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "backend": { "label": "诊断逻辑" },
+        "security": { "label": "判定策略" },
+        "messagebus": { "label": "CI 触发" },
+        "database": { "label": "上下文证据" },
+        "cloud": { "label": "验证执行" }
+      }
+    }
+  },
+  "lanes": [
+    { "id": "diagnosis_main", "label": "通用诊断与验证主线" },
+    { "id": "enterprise_branch", "label": "企业领域知识补充", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "observe", "label": "失败与材料", "fromCol": 0, "toCol": 1 },
+    { "id": "diagnose", "label": "分流与诊断", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "verify", "label": "修复与验证", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": [
+    "ci_failure",
+    "failure_material",
+    "knowledge_gate",
+    "generic_diagnosis",
+    "repair_candidate",
+    "three_layer_verification"
+  ],
+  "nodes": [
+    {
+      "id": "ci_failure",
+      "lane": "diagnosis_main",
+      "col": 0,
+      "type": "messagebus",
+      "label": "CI 失败",
+      "sublabel": "进入诊断闭环"
+    },
+    {
+      "id": "failure_material",
+      "lane": "diagnosis_main",
+      "col": 1,
+      "type": "database",
+      "label": "失败材料",
+      "sublabel": "日志 · 变更",
+      "width": 60
+    },
+    {
+      "id": "knowledge_gate",
+      "lane": "diagnosis_main",
+      "col": 2,
+      "type": "security",
+      "label": "分流",
+      "sublabel": "企业知识？",
+      "width": 44
+    },
+    {
+      "id": "generic_diagnosis",
+      "lane": "diagnosis_main",
+      "col": 3,
+      "type": "backend",
+      "label": "通用",
+      "sublabel": "代码诊断",
+      "width": 40
+    },
+    {
+      "id": "enterprise_domain",
+      "lane": "enterprise_branch",
+      "col": 2,
+      "type": "backend",
+      "label": "识别企业领域",
+      "sublabel": "产品 · 版本 · 场景",
+      "width": 96
+    },
+    {
+      "id": "enterprise_evidence",
+      "lane": "enterprise_branch",
+      "col": 3,
+      "type": "database",
+      "label": "领域证据诊断",
+      "sublabel": "规则 · 当前状态 · 案例差异",
+      "width": 102
+    },
+    {
+      "id": "repair_candidate",
+      "lane": "diagnosis_main",
+      "col": 4,
+      "type": "security",
+      "label": "根因",
+      "sublabel": "最小修复",
+      "width": 40
+    },
+    {
+      "id": "three_layer_verification",
+      "lane": "diagnosis_main",
+      "col": 5,
+      "type": "cloud",
+      "label": "三层验证",
+      "sublabel": "原失败 · 影响 · 全量",
+      "tag": "独立环境",
+      "width": 84
+    }
+  ],
+  "edges": [
+    { "id": "failure_to_material", "from": "ci_failure", "to": "failure_material", "variant": "emphasis", "role": "main" },
+    { "id": "material_to_gate", "from": "failure_material", "to": "knowledge_gate", "role": "main" },
+    { "id": "gate_to_generic", "from": "knowledge_gate", "to": "generic_diagnosis", "label": "通用", "variant": "emphasis", "role": "main", "route": "straight", "fromSide": "right", "toSide": "left" },
+    { "id": "gate_to_enterprise", "from": "knowledge_gate", "to": "enterprise_domain", "label": "企业", "variant": "security", "role": "branch", "route": "drop", "fromSide": "bottom", "toSide": "top", "labelDx": -24 },
+    { "id": "generic_to_candidate", "from": "generic_diagnosis", "to": "repair_candidate", "variant": "emphasis", "role": "main" },
+    { "id": "enterprise_to_evidence", "from": "enterprise_domain", "to": "enterprise_evidence", "variant": "security", "role": "branch", "route": "straight", "fromSide": "right", "toSide": "left" },
+    { "id": "evidence_to_candidate", "from": "enterprise_evidence", "to": "repair_candidate", "variant": "security", "role": "branch" },
+    { "id": "candidate_to_verification", "from": "repair_candidate", "to": "three_layer_verification", "variant": "emphasis", "role": "main" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "路径判断",
+      "items": [
+        "先收集失败任务、日志、代码与变更、依赖和运行环境",
+        "公开代码、日志和标准工具足以解释根因：进入通用路径",
+        "关键判断依赖内部规则或当前业务状态：进入企业领域路径",
+        "通用诊断遇到无法解释的内部概念时停止猜测并转路由"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "企业领域证据链",
+      "items": [
+        "领域知识提供当前产品、版本和场景适用的规则",
+        "案例库只提供历史线索，必须比较相同点、不同点和未知点",
+        "当前状态 + 适用规则 + 最近变更 + 业务意图共同证明根因"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "验证结论与边界",
+      "items": [
+        "依次验证原失败步骤、直接影响范围和完整流水线",
+        "失败时保留新日志回到诊断；证据不足时输出无法判断",
+        "候选通过当前流水线不等于正式采用、业务完全正确或生产安全"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+filters:
+  and:
+    - domain == "ci-self-healing"
+    - file.ext == "md"
+    - not:
+        - file.inFolder("90_Templates")
+        - file.inFolder("99_Attachments")
+formulas:
+  days_since_verified: if(verified_at, (today() - date(verified_at)).days, "")
+  needs_refresh: if(verified_at && refresh_days, (today() - date(verified_at)).days > refresh_days, false)
+  review_state: if(reviewed, "已确认", "待确认")
+properties:
+  file.name:
+    displayName: 笔记
+  type:
+    displayName: 类型
+  subtype:
+    displayName: 子类型
+  status:
+    displayName: 状态
+  authority:
+    displayName: 来源级别
+  vendor:
+    displayName: 厂商或机构
+  verified_at:
+    displayName: 最后核验
+  formula.days_since_verified:
+    displayName: 距核验天数
+  formula.needs_refresh:
+    displayName: 需要刷新
+  formula.review_state:
+    displayName: 人工确认
+  alternative_notes:
+    displayName: 替代候选
+  experiment_notes:
+    displayName: 关联实验
+  decision_notes:
+    displayName: 关联决策
+  architecture_notes:
+    displayName: 关联架构
+  candidate_notes:
+    displayName: 关联候选
+views:
+  - type: table
+    name: 候选待处理
+    filters:
+      and:
+        - type == "source"
+        - status == "inbox"
+    order:
+      - file.name
+      - subtype
+      - authority
+      - vendor
+      - updated
+  - type: table
+    name: 已批准待分析
+    filters:
+      and:
+        - type == "source"
+        - status == "approved"
+    order:
+      - file.name
+      - subtype
+      - authority
+      - vendor
+      - formula.review_state
+  - type: table
+    name: AI 草稿待确认
+    filters:
+      and:
+        - reviewed == false
+        - status != "inbox"
+        - status != "archived"
+    order:
+      - file.name
+      - type
+      - subtype
+      - status
+      - updated
+  - type: table
+    name: 陈旧来源
+    filters:
+      and:
+        - type == "source"
+        - or:
+            - status == "stale"
+            - formula.needs_refresh == true
+    order:
+      - file.name
+      - authority
+      - verified_at
+      - formula.days_since_verified
+      - refresh_days
+  - type: table
+    name: 常青知识
+    filters:
+      and:
+        - type == "evergreen"
+    groupBy:
+      property: subtype
+      direction: ASC
+    order:
+      - file.name
+      - subtype
+      - status
+      - formula.review_state
+      - updated
+      - source_notes
+  - type: table
+    name: 方案候选
+    filters:
+      and:
+        - type == "project"
+        - subtype == "solution-candidate"
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - file.name
+      - status
+      - formula.review_state
+      - updated
+      - source_notes
+      - alternative_notes
+      - experiment_notes
+      - decision_notes
+      - architecture_notes
+  - type: table
+    name: 架构与决策
+    filters:
+      and:
+        - type == "project"
+        - or:
+            - subtype == "architecture"
+            - subtype == "adr"
+    order:
+      - file.name
+      - subtype
+      - status
+      - formula.review_state
+      - updated
+      - source_notes
+      - candidate_notes
+  - type: table
+    name: 实验
+    filters:
+      and:
+        - type == "project"
+        - subtype == "experiment"
+    order:
+      - file.name
+      - status
+      - formula.review_state
+      - updated
+      - candidate_notes
+      - decision_notes
+  - type: table
+    name: 设计可用
+    filters:
+      or:
+        - and:
+            - type == "evergreen"
+            - status == "active"
+            - reviewed == true
+        - and:
+            - type == "project"
+            - subtype == "architecture"
+            - status == "validated"
+            - reviewed == true
+        - and:
+            - type == "project"
+            - subtype == "adr"
+            - status == "accepted"
+            - reviewed == true
+    order:
+      - file.name
+      - type
+      - subtype
+      - status
+      - updated
+      - source_notes
+      - candidate_notes

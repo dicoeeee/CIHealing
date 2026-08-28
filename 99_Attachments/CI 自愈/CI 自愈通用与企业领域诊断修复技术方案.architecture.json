@@ -1,0 +1,517 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CI 自愈通用与企业领域诊断修复技术方案",
+    "output": "99_Attachments/CI 自愈/CI 自愈通用与企业领域诊断修复技术方案.html",
+    "subtitle": "评审总览：领域识别、版本化能力包、运行时诊断证据与有界 Healing Session",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "viewBox": [1360, 820],
+    "views": [
+      {
+        "id": "end-to-end",
+        "label": "端到端总览",
+        "focus": [
+          "ci_failure",
+          "failure_material",
+          "knowledge_gate",
+          "generic_diagnosis",
+          "enterprise_scope",
+          "domain_knowledge",
+          "state_query",
+          "enterprise_evidence",
+          "diagnosis_package",
+          "adaptive_plan",
+          "attempt_candidate",
+          "original_failure_verification",
+          "affected_scope_verification",
+          "full_ci_verification",
+          "attempt_decision",
+          "session_context",
+          "candidate_passed",
+          "session_stop"
+        ],
+        "note": "从 CI 失败进入领域识别，路由兼容知识与工具，形成统一诊断契约，再在有界 Healing Session 中生成、验证并迭代候选。"
+      },
+      {
+        "id": "domain-evidence",
+        "label": "企业领域路径",
+        "focus": [
+          "knowledge_gate",
+          "enterprise_scope",
+          "domain_knowledge",
+          "state_query",
+          "case_library",
+          "enterprise_evidence",
+          "diagnosis_package"
+        ],
+        "note": "领域识别只负责选择知识域；Domain Knowledge Pack 提供版本化知识、工具和 Validator；运行时诊断证据记录当前事实，Case Library 只提供历史先验。"
+      },
+      {
+        "id": "healing-loop",
+        "label": "Healing Session Loop",
+        "focus": [
+          "adaptive_plan",
+          "attempt_candidate",
+          "original_failure_verification",
+          "affected_scope_verification",
+          "full_ci_verification",
+          "attempt_decision",
+          "session_context",
+          "candidate_passed",
+          "session_stop"
+        ],
+        "note": "代码每轮从固定基线洁净重建，证据跨轮累积；首次三层验证通过即结束，candidate_passed 不等于采用，最多验证 5 个完整候选。"
+      }
+    ],
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "messagebus": { "label": "CI 触发" },
+        "database": { "label": "材料与证据" },
+        "security": { "label": "规则与判定" },
+        "backend": { "label": "诊断与规划" },
+        "cloud": { "label": "验证执行" },
+        "external": { "label": "Session 结果" }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "ci_failure",
+      "type": "messagebus",
+      "label": "CI 失败",
+      "sublabel": "初始失败触发",
+      "pos": [20, 80],
+      "size": [110, 64]
+    },
+    {
+      "id": "failure_material",
+      "type": "database",
+      "label": "失败材料",
+      "sublabel": "日志 · 变更 · 元数据",
+      "pos": [154, 80],
+      "size": [130, 64]
+    },
+    {
+      "id": "knowledge_gate",
+      "type": "security",
+      "label": "领域识别",
+      "sublabel": "选择知识域与能力包",
+      "tag": "不预判具体根因",
+      "pos": [308, 80],
+      "size": [130, 64]
+    },
+    {
+      "id": "generic_diagnosis",
+      "type": "backend",
+      "label": "通用诊断",
+      "sublabel": "代码 · 测试 · 依赖",
+      "tag": "通用工程知识",
+      "pos": [470, 45],
+      "size": [145, 64]
+    },
+    {
+      "id": "enterprise_scope",
+      "type": "backend",
+      "label": "知识与工具路由",
+      "sublabel": "元数据过滤 · 受限工具",
+      "tag": "冲突 / 缺失 → inconclusive",
+      "pos": [470, 239],
+      "size": [145, 64]
+    },
+    {
+      "id": "domain_knowledge",
+      "type": "security",
+      "label": "Domain Knowledge Pack",
+      "sublabel": "规则 · Schema · 工具 · 验证",
+      "tag": "版本化能力包",
+      "pos": [645, 235],
+      "size": [155, 72]
+    },
+    {
+      "id": "state_query",
+      "type": "database",
+      "label": "查询当前状态",
+      "sublabel": "值 · 来源 · 继承 · 基线",
+      "tag": "按 Pack 定义执行",
+      "pos": [645, 390],
+      "size": [155, 64]
+    },
+    {
+      "id": "case_library",
+      "type": "database",
+      "label": "Case Library",
+      "sublabel": "假设 · 差异 · 负向约束",
+      "tag": "三阶段历史先验",
+      "pos": [470, 390],
+      "size": [145, 64]
+    },
+    {
+      "id": "enterprise_evidence",
+      "type": "backend",
+      "label": "企业领域诊断证据",
+      "sublabel": "规则 · 状态 · 变更 · 意图",
+      "tag": "运行时事实 · 非根因结论",
+      "pos": [825, 235],
+      "size": [150, 72]
+    },
+    {
+      "id": "diagnosis_package",
+      "type": "backend",
+      "label": "统一诊断结论",
+      "sublabel": "根因 · 影响范围 · 修复边界",
+      "tag": "含必需验证",
+      "pos": [825, 45],
+      "size": [150, 64]
+    },
+    {
+      "id": "adaptive_plan",
+      "type": "backend",
+      "label": "自适应规划",
+      "sublabel": "重诊断 · 调整 · 换策略",
+      "tag": "AI 自主选择 · 可补证据",
+      "pos": [1000, 45],
+      "size": [135, 64]
+    },
+    {
+      "id": "attempt_candidate",
+      "type": "security",
+      "label": "Attempt N",
+      "sublabel": "从基线生成完整候选",
+      "tag": "进入验证才计数 · N ≤ 5",
+      "pos": [1180, 45],
+      "size": [155, 64]
+    },
+    {
+      "id": "original_failure_verification",
+      "type": "cloud",
+      "label": "① 原失败复验",
+      "sublabel": "重跑初始失败任务",
+      "tag": "失败返回新日志",
+      "pos": [1180, 195],
+      "size": [155, 64]
+    },
+    {
+      "id": "affected_scope_verification",
+      "type": "cloud",
+      "label": "② 影响范围验证",
+      "sublabel": "相关测试 · 下游 · 企业专项",
+      "tag": "拦截相邻回归",
+      "pos": [1180, 345],
+      "size": [155, 64]
+    },
+    {
+      "id": "full_ci_verification",
+      "type": "cloud",
+      "label": "③ 完整 CI",
+      "sublabel": "仓库完整流水线",
+      "tag": "必需验证",
+      "pos": [1180, 498],
+      "size": [155, 64]
+    },
+    {
+      "id": "attempt_decision",
+      "type": "security",
+      "label": "本轮决策",
+      "sublabel": "pass · continue · stop",
+      "tag": "新失败由 AI 归因",
+      "pos": [1000, 495],
+      "size": [135, 70]
+    },
+    {
+      "id": "session_context",
+      "type": "database",
+      "label": "Session 上下文",
+      "sublabel": "证据 · 反证 · 负向约束",
+      "tag": "基线固定 · 每轮洁净重建",
+      "pos": [1000, 265],
+      "size": [135, 74]
+    },
+    {
+      "id": "candidate_passed",
+      "type": "external",
+      "label": "candidate_passed",
+      "sublabel": "首次完整通过即结束",
+      "tag": "不等于采用 / 合并 / 发布",
+      "pos": [990, 690],
+      "size": [155, 64]
+    },
+    {
+      "id": "session_stop",
+      "type": "external",
+      "label": "未解决退出",
+      "sublabel": "no_progress · inconclusive",
+      "tag": "提前停止 / 达到 5 次",
+      "pos": [815, 690],
+      "size": [155, 64]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "企业领域路径 · 领域识别 → 能力包 → 运行时诊断证据",
+      "wraps": [
+        "enterprise_scope",
+        "domain_knowledge",
+        "state_query",
+        "case_library",
+        "enterprise_evidence"
+      ],
+      "pad": 12
+    },
+    {
+      "kind": "region",
+      "label": "Healing Session · max_attempts = 5",
+      "wraps": [
+        "adaptive_plan",
+        "attempt_candidate",
+        "original_failure_verification",
+        "affected_scope_verification",
+        "full_ci_verification",
+        "attempt_decision",
+        "session_context"
+      ],
+      "pad": 12
+    }
+  ],
+  "connections": [
+    {
+      "id": "failure_to_material",
+      "from": "ci_failure",
+      "to": "failure_material",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "material_to_gate",
+      "from": "failure_material",
+      "to": "knowledge_gate",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "gate_to_generic",
+      "from": "knowledge_gate",
+      "to": "generic_diagnosis",
+      "label": "通用知识域",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "route": "orthogonal-h",
+      "labelAt": [454, 160]
+    },
+    {
+      "id": "gate_to_enterprise",
+      "from": "knowledge_gate",
+      "to": "enterprise_scope",
+      "label": "企业知识域",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [[373, 175], [440, 175], [440, 271]],
+      "labelAt": [411, 166]
+    },
+    {
+      "id": "generic_to_package",
+      "from": "generic_diagnosis",
+      "to": "diagnosis_package",
+      "label": "通用诊断材料",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "scope_to_knowledge",
+      "from": "enterprise_scope",
+      "to": "domain_knowledge",
+      "variant": "security",
+      "route": "straight"
+    },
+    {
+      "id": "knowledge_to_state",
+      "from": "domain_knowledge",
+      "to": "state_query",
+      "label": "受限查询工具",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v",
+      "labelDx": 62
+    },
+    {
+      "id": "knowledge_to_evidence",
+      "from": "domain_knowledge",
+      "to": "enterprise_evidence",
+      "label": "规则 · Schema · Validator",
+      "variant": "security",
+      "route": "straight",
+      "labelAt": [812, 321]
+    },
+    {
+      "id": "state_to_evidence",
+      "from": "state_query",
+      "to": "enterprise_evidence",
+      "label": "当前状态",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [[900, 422]],
+      "labelAt": [850, 414]
+    },
+    {
+      "id": "scope_to_case",
+      "from": "enterprise_scope",
+      "to": "case_library",
+      "label": "案例索引",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v",
+      "labelDx": -58
+    },
+    {
+      "id": "evidence_to_package",
+      "from": "enterprise_evidence",
+      "to": "diagnosis_package",
+      "label": "企业诊断事实",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "orthogonal-v",
+      "labelDx": 62
+    },
+    {
+      "id": "package_to_plan",
+      "from": "diagnosis_package",
+      "to": "adaptive_plan",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "case_to_context",
+      "from": "case_library",
+      "to": "session_context",
+      "label": "策略 / 验证先验（非规则证据）",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [[542.5, 475], [980, 475], [980, 302]],
+      "labelAt": [760, 466]
+    },
+    {
+      "id": "context_to_plan",
+      "from": "session_context",
+      "to": "adaptive_plan",
+      "label": "下一轮上下文",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "orthogonal-v",
+      "labelDx": -62
+    },
+    {
+      "id": "plan_to_attempt",
+      "from": "adaptive_plan",
+      "to": "attempt_candidate",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "attempt_to_original",
+      "from": "attempt_candidate",
+      "to": "original_failure_verification",
+      "label": "完整候选进入验证",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v",
+      "labelDx": -74
+    },
+    {
+      "id": "original_to_affected",
+      "from": "original_failure_verification",
+      "to": "affected_scope_verification",
+      "label": "通过",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v",
+      "labelDx": 36
+    },
+    {
+      "id": "original_fail_to_decision",
+      "from": "original_failure_verification",
+      "to": "attempt_decision",
+      "label": "失败",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "right",
+      "via": [[1150, 227], [1150, 530]],
+      "labelAt": [1144, 245]
+    },
+    {
+      "id": "affected_to_full",
+      "from": "affected_scope_verification",
+      "to": "full_ci_verification",
+      "label": "通过",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v",
+      "labelDx": 36
+    },
+    {
+      "id": "affected_fail_to_decision",
+      "from": "affected_scope_verification",
+      "to": "attempt_decision",
+      "label": "失败",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "right",
+      "via": [[1165, 377], [1165, 530]],
+      "labelAt": [1170, 430]
+    },
+    {
+      "id": "full_to_decision",
+      "from": "full_ci_verification",
+      "to": "attempt_decision",
+      "variant": "security",
+      "route": "straight"
+    },
+    {
+      "id": "decision_to_context",
+      "from": "attempt_decision",
+      "to": "session_context",
+      "label": "continue · 累积证据",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "orthogonal-v",
+      "labelAt": [1067.5, 425]
+    },
+    {
+      "id": "decision_to_passed",
+      "from": "attempt_decision",
+      "to": "candidate_passed",
+      "label": "pass",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v",
+      "labelDx": 34
+    },
+    {
+      "id": "decision_to_stop",
+      "from": "attempt_decision",
+      "to": "session_stop",
+      "label": "stop",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [[1067.5, 625], [892.5, 625]],
+      "labelAt": [980, 616]
+    }
+  ]
+}

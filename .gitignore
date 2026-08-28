@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+*.log
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json

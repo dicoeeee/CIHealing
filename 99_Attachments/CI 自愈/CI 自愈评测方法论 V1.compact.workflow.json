@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "CI 自愈评测方法论 V1",
+    "output": "99_Attachments/CI 自愈/CI 自愈评测方法论 V1.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "evaluation_main", "label": "Evaluation 主线" },
+    { "id": "human_path", "label": "Human Reference 与仲裁", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "evaluation_phase", "label": "成功 Repair → 证据组装 → 语义评测 → Verdict", "fromCol": 0, "toCol": 5, "variant": "emphasis" }
+  ],
+  "mainPath": [
+    "repair_ready",
+    "admission_gate",
+    "evidence_bundle",
+    "semantic_evaluator",
+    "relation_class",
+    "verdict_out"
+  ],
+  "nodes": [
+    {
+      "id": "repair_ready",
+      "lane": "evaluation_main",
+      "col": 0,
+      "type": "backend",
+      "label": "成功 Repair",
+      "sublabel": "Failed + Full CI PASS",
+      "tag": "准入前提",
+      "width": 90
+    },
+    {
+      "id": "admission_gate",
+      "lane": "evaluation_main",
+      "col": 1,
+      "type": "security",
+      "label": "准入",
+      "sublabel": "成功结果",
+      "width": 50
+    },
+    {
+      "id": "evidence_bundle",
+      "lane": "evaluation_main",
+      "col": 2,
+      "type": "database",
+      "label": "证据包",
+      "sublabel": "6 组",
+      "width": 50
+    },
+    {
+      "id": "semantic_evaluator",
+      "lane": "evaluation_main",
+      "col": 3,
+      "type": "backend",
+      "label": "八维",
+      "sublabel": "评测",
+      "width": 40
+    },
+    {
+      "id": "relation_class",
+      "lane": "evaluation_main",
+      "col": 4,
+      "type": "security",
+      "label": "关系",
+      "sublabel": "4 类",
+      "width": 40
+    },
+    {
+      "id": "verdict_out",
+      "lane": "evaluation_main",
+      "col": 5,
+      "type": "messagebus",
+      "label": "最终 Verdict",
+      "sublabel": "4 类结论",
+      "width": 90
+    },
+    {
+      "id": "reference_normalizer",
+      "lane": "human_path",
+      "col": 1,
+      "type": "external",
+      "label": "人工修复归一化",
+      "sublabel": "Human Reference",
+      "width": 100
+    },
+    {
+      "id": "adjudication",
+      "lane": "human_path",
+      "col": 4,
+      "type": "external",
+      "label": "人工仲裁",
+      "sublabel": "补证定案",
+      "tag": "UNCERTAIN",
+      "width": 78
+    }
+  ],
+  "edges": [
+    { "from": "repair_ready", "to": "admission_gate", "role": "main", "variant": "emphasis" },
+    { "from": "admission_gate", "to": "evidence_bundle", "role": "main" },
+    { "from": "evidence_bundle", "to": "semantic_evaluator", "label": "证据门禁", "role": "main", "variant": "emphasis" },
+    { "from": "semantic_evaluator", "to": "relation_class", "role": "main" },
+    { "from": "relation_class", "to": "verdict_out", "role": "main", "variant": "emphasis" },
+    { "from": "reference_normalizer", "to": "evidence_bundle", "role": "branch", "variant": "dashed" },
+    { "from": "semantic_evaluator", "to": "adjudication", "label": "UNCERTAIN", "role": "error", "variant": "security" },
+    { "from": "adjudication", "to": "verdict_out", "label": "人工定案", "role": "return", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Evaluation Evidence Package",
+      "items": [
+        "Failure Evidence + Baseline Context",
+        "AI Repair Evidence + Verification Evidence",
+        "Correctness Oracle + Human Reference"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "八维 Repair 正确性",
+      "items": [
+        "Failure 对齐 · 因果有效性 · 行为契约 · 修复完整性",
+        "修改范围 · 校验门禁 · 约束兼容性 · 回归冲突",
+        "Patch-only 只能生成结构信号，不能生成 Correctness Verdict"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Verdict 与边界",
+      "items": [
+        "MATCHED → VERIFIED_HEAL · VALID_ALTERNATIVE → VALID_HEAL",
+        "MISMATCH → FALSE_HEAL · UNCERTAIN → NEEDS_REVIEW",
+        "Evidence 不足必须 UNCERTAIN；Independent Replay 仅做周期抽检"
+      ]
+    }
+  ]
+}

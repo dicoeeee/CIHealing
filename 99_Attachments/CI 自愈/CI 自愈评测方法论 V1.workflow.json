@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "CI 自愈评测方法论 V1",
+    "output": "99_Attachments/CI 自愈/CI 自愈评测方法论 V1.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "self_healing", "label": "Self-Healing" },
+    { "id": "evidence", "label": "证据准备" },
+    { "id": "evaluation", "label": "Evaluation" },
+    { "id": "verdict", "label": "结果" },
+    { "id": "exception", "label": "例外与校准", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "intake", "label": "成功结果与准入", "fromCol": 0, "toCol": 1 },
+    { "id": "prepare", "label": "Reference 与 Evidence", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "judge", "label": "语义判定与结论", "fromCol": 4, "toCol": 5, "variant": "security" }
+  ],
+  "mainPath": [
+    "repair_result",
+    "admission",
+    "human_normalization",
+    "evidence_package",
+    "repair_evaluation",
+    "repair_relation",
+    "final_verdict"
+  ],
+  "nodes": [
+    {
+      "id": "repair_result",
+      "lane": "self_healing",
+      "col": 0,
+      "type": "backend",
+      "label": "成功 Repair",
+      "sublabel": "Failed + Full CI PASS",
+      "tag": "准入前提",
+      "width": 92
+    },
+    {
+      "id": "admission",
+      "lane": "self_healing",
+      "col": 1,
+      "type": "security",
+      "label": "准入检查",
+      "sublabel": "Patch + Receipt 完整",
+      "width": 80
+    },
+    {
+      "id": "human_normalization",
+      "lane": "evidence",
+      "col": 2,
+      "type": "external",
+      "label": "人工修复归一化",
+      "sublabel": "Human Reference Repair",
+      "width": 100
+    },
+    {
+      "id": "evidence_package",
+      "lane": "evidence",
+      "col": 3,
+      "type": "database",
+      "label": "Evidence 包",
+      "sublabel": "六组证据交叉核对",
+      "width": 98
+    },
+    {
+      "id": "repair_evaluation",
+      "lane": "evaluation",
+      "col": 4,
+      "type": "backend",
+      "label": "Repair Evaluator",
+      "sublabel": "Evidence Gate → 8 维",
+      "tag": "8 维",
+      "width": 108
+    },
+    {
+      "id": "repair_relation",
+      "lane": "evaluation",
+      "col": 5,
+      "type": "security",
+      "label": "关系分类",
+      "sublabel": "非平均分 / 非投票",
+      "tag": "4 类",
+      "width": 86
+    },
+    {
+      "id": "final_verdict",
+      "lane": "verdict",
+      "col": 5,
+      "type": "messagebus",
+      "label": "最终 Verdict",
+      "sublabel": "4 类结论",
+      "width": 96
+    },
+    {
+      "id": "human_review",
+      "lane": "exception",
+      "col": 4,
+      "type": "external",
+      "label": "人工仲裁",
+      "sublabel": "Patch 信号 / 补证定案",
+      "tag": "UNCERTAIN",
+      "width": 104
+    }
+  ],
+  "edges": [
+    { "from": "repair_result", "to": "admission", "role": "main", "variant": "emphasis" },
+    { "from": "admission", "to": "human_normalization", "label": "准入通过", "role": "main" },
+    { "from": "human_normalization", "to": "evidence_package", "role": "main" },
+    { "from": "evidence_package", "to": "repair_evaluation", "label": "证据门禁", "role": "main", "variant": "emphasis" },
+    { "from": "repair_evaluation", "to": "repair_relation", "role": "main" },
+    { "from": "repair_relation", "to": "final_verdict", "role": "main", "variant": "emphasis" },
+    { "from": "repair_evaluation", "to": "human_review", "label": "证据不足 / 冲突", "role": "error", "variant": "security", "channelX": 430 },
+    { "from": "human_review", "to": "final_verdict", "label": "人工定案", "role": "return", "variant": "dashed", "labelDx": 60 }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Evaluation Evidence Package",
+      "items": [
+        "Failure Evidence + Baseline Context",
+        "AI Repair Evidence + Verification Evidence",
+        "Correctness Oracle + Human Reference"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "八维 Repair 正确性",
+      "items": [
+        "Failure 对齐 · 因果有效性",
+        "行为契约 · 修复完整性",
+        "修改范围 · 校验门禁",
+        "约束兼容性 · 回归冲突"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Verdict 与判定边界",
+      "items": [
+        "MATCHED → VERIFIED_HEAL · VALID_ALTERNATIVE → VALID_HEAL",
+        "MISMATCH → FALSE_HEAL · UNCERTAIN → NEEDS_REVIEW",
+        "Patch-only 不是 Verdict；Evidence 不足必须 UNCERTAIN；Independent Replay 仅做周期抽检"
+      ]
+    }
+  ]
+}
