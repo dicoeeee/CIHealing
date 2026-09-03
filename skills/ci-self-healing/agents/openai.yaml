@@ -1,0 +1,4 @@
+interface:
+  display_name: "CI Self-Healing"
+  short_description: "Evidence-driven CI diagnosis and repair"
+  default_prompt: "Use $ci-self-healing to diagnose and repair this CI failure with local or remote verification."
