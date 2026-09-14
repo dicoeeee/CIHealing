@@ -17,6 +17,8 @@
 
 ## Healing Request
 
+`Healing Request` 的验证模式、候选 `Attempt` 和修复成功结果只适用于修复任务。仅诊断任务复用失败事实与诊断评估，按主 Skill 的[只读分支](../SKILL.md#选择模式)结束；不创建候选或 Attempt，也不因未执行修复验证而返回 `inconclusive`。
+
 ```yaml
 healing_request:
   mode: local_verify | remote_verify
