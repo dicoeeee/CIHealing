@@ -26,7 +26,7 @@ description: 使用基于证据的根因分析、范围受控的本地代码修�
 ## 执行修复流程
 
 1. 按诊断指南绑定准确的失败与基线，主动获取相关变更上下文并形成有证据支持的诊断。取证与定位可交错进行，方法和深度由当前信息缺口决定。
-2. 形成 [修复依据](references/repair-and-verification.md#修复依据)，据此决定准入；该记录复用取证结果，不替代上下文调查。关键缺口按诊断指南处理。
+2. 形成 [修复依据](references/repair-and-verification.md#修复依据)，先检查 [语义方向歧义](references/diagnosis-and-repair.md#语义方向歧义)：未解决时暂停候选修改，再按关键缺口规则取证、协作或结束。依据记录复用取证结果，不替代上下文调查。
 3. 按执行指南保留工作空间原有内容，实施候选并执行声明的验证；遵守核心合同的 [调用身份与限额](references/core-contracts.md#调用身份与限额)。放弃候选时先完成安全恢复，再尝试下一候选。
 4. 按 [结果判定](references/repair-and-verification.md#结果判定)和 [结果报告](references/execution-modes.md#结果报告)交付实际观察到的结果；需要协作时，区分请求提交、当前子任务结束和整次修复完成。
 
