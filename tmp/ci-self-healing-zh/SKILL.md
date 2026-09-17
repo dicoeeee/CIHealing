@@ -23,7 +23,9 @@ description: 基于证据诊断确定性的 CI 失败，在授权范围内按有
 按实际问题补充指南：
 
 - **读取外部 CI 状态或证据、执行远端验证**：阅读 [Provider 合同](references/provider-contract.md)。平台名称本身不代表存在可用适配器。
+- **依赖声明、解析、获取或制品消费相关失败**：阅读 [依赖诊断与修复](references/dependency-diagnosis-and-repair.md)。与源码编译重叠时按信息缺口组合使用领域指南；仅存在依赖清单不构成加载条件。
 - **Maven 驱动的 Java 主源码或测试源码编译失败**：阅读 [Java/Maven 增量指南](references/java-maven-compilation.md)。仅存在 `pom.xml` 不构成加载条件。
+- **C/C++ 或原生编译器、头文件、模板、预处理、链接或 ABI 失败**：阅读 [C/C++ 编译诊断与修复](references/c-cpp-compilation.md)。
 
 ## 修复依据核查
 
