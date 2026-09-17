@@ -1,6 +1,6 @@
 # 核心合同
 
-本文件用于修复调用。以下是逻辑合同：宿主可编码为 YAML、JSON、记录或事件；没有指定格式时，简要表达所需内容并引用已有证据即可，无需新增状态机或重复表单。字段的简写不降低身份、权限或验证要求，也不允许省略行动前所需的记录或用事后补写替代；准入时序见 [候选修改前的准入记录](repair-and-verification.md#候选修改前的准入记录)。
+本文件定义修复调用的逻辑合同。过程记录可由宿主编码为 YAML、JSON、消息或事件；格式未指定时，表达必要内容并引用已有证据即可。简写仍须满足身份、权限、验证和[准入时序](repair-and-verification.md#候选修改前的准入记录)，无需新增状态机或重复表单。最终文字交付使用[报告规范](result-report.md)，不受过程记录的格式自由度影响。
 
 ## 运行时边界
 
@@ -17,7 +17,7 @@
 
 ## Healing Request
 
-以下字段只用于修复任务；只读任务按入口结束，不因未执行修复验证而返回修复结果。失败事实与诊断记录定义在 [建立失败合同](diagnosis-and-repair.md#建立失败合同)。
+以下合同用于修复调用；只读任务不要求建立修复身份或返回修复终局结果，报告输出参数仍按[入口约定](../SKILL.md#调用参数与报告输出)使用。失败事实与诊断记录定义在[建立失败合同](diagnosis-and-repair.md#建立失败合同)。
 
 ```yaml
 healing_request:
@@ -35,6 +35,7 @@ healing_request:
     job_id: optional
     task_or_command: optional
   baseline_sha: auto | explicit
+  output_dir: optional
   limits:
     max_attempts: 5
     time_budget: optional
