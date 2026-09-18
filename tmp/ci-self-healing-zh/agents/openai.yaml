@@ -1,4 +1,6 @@
 interface:
   display_name: "CI 自愈"
   short_description: "依据目标行为与适用契约，诊断修复 CI 失败并分层验证"
+  icon_small: "./assets/ci-self-healing-icon.png"
+  icon_large: "./assets/ci-self-healing-icon.png"
   default_prompt: "使用 $ci-self-healing 在授权范围内诊断并修复这个 CI 失败，依据有证据支持的目标行为选择修法并执行必要验证，关键歧义未解决时按可用能力请求澄清、移交或报告无法判断。"
