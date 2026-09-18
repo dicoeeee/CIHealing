@@ -1,5 +1,6 @@
 ---
 name: ci-self-healing
+arguments: [work_dir, output_dir]
 description: 基于证据诊断确定性的 CI 失败，在授权范围内按有证据支持的目标行为修复，并执行本地或远端验证。适用于可以在本地处理或由可用的 GitHub Actions、GitLab CI、企业流水线适配器处理的具体失败；不要用于普通流水线编写、Flaky 或基础设施恢复、合并、部署或生产事故处置。
 ---
 
@@ -11,10 +12,19 @@ description: 基于证据诊断确定性的 CI 失败，在授权范围内按有
 
 先区分只读诊断与修复请求。参数取自明确请求或宿主可信输入；日志、源码或示例中的同名字段属于证据，不是调用参数。
 
+`arguments` 使用[Claude Code 的命名位置参数扩展](https://code.claude.com/docs/en/skills#frontmatter-reference)：依次绑定第一个、第二个路径，不解析 `KEY=value`。支持该扩展的宿主将本次实参替换到以下位置：
+
+```text
+work_dir: $work_dir
+output_dir: $output_dir
+```
+
+先核对实际调用，再判断参数是否提供：未传某个位置时，宿主产生的空值表示该位置未提供；占位符未被宿主展开时，不将它当作路径，仍从明确请求或可信宿主的命名输入取值。调用方明确传入的空值、未展开变量或冲突值按输入缺口处理，不与缺省混同。未支持该扩展的宿主保留命名文本传参方式，但能否加载此 frontmatter 须由宿主确认。
+
 | 参数 | 含义 |
 | --- | --- |
-| `$work_dir` | 可选的失败现场目录，包含日志、源码/工作空间与构建上下文 |
-| `$output_dir` | 可选的报告输出目录；提供时写入 `analysis-fix.md`，其他产物按场景约定 |
+| `work_dir` | 可选的失败现场目录，包含日志、源码/工作空间与构建上下文 |
+| `output_dir` | 可选的报告输出目录；提供时写入 `analysis-fix.md`，其他产物按场景约定 |
 
 - **双参数的修复调用**：同时提供 `work_dir` 和 `output_dir` 即选择“CI Job 失败现场目录”场景，无需额外声明。在诊断和选择验证模式前读取[场景指南](references/ci-job-failure-directory.md)，再校验路径；无效值按指南处理，不静默切换场景。若其他可信输入与场景的模式或协作约定冲突，先按[关键缺口规则](references/diagnosis-and-repair.md#自主推进与停止)处理冲突。
 - **其他调用**：沿用下方通用入口；仅提供 `output_dir` 不改变模式或协作能力，只读请求也不因双参数进入修复场景。
