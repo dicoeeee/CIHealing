@@ -1,12 +1,19 @@
 ---
 name: ci-self-healing
 arguments: [work_dir, output_dir]
-description: 基于证据诊断确定性的 CI 失败，在授权范围内按有证据支持的目标行为修复，并执行本地或远端验证。适用于可以在本地处理或由可用的 GitHub Actions、GitLab CI、企业流水线适配器处理的具体失败；不要用于普通流水线编写、Flaky 或基础设施恢复、合并、部署或生产事故处置。
+description: 诊断具体的 CI 失败，在授权范围内按有证据支持的目标行为修改代码或构建配置，并执行本地或远端验证。适用于确定性代码、测试、依赖和构建问题；不用于普通流水线编写、已确认的 Flaky/基础设施恢复、合并、部署或生产事故处置。
 ---
 
 # CI 自愈
 
 修复任务的目标是在授权范围内消除导致 CI 失败的问题，使相关代码符合有证据支持的目标行为与适用契约。构建和必要检查通过是验收条件，不是替代目标行为的依据。仅在满足这些条件的方案中优化速度、复杂度和改动范围。
+
+## 分类 Profile 绑定
+
+- 固定 Profile：未配置
+- Profile 入口：未配置
+
+固定绑定、可信调用选择或配置冲突需要处理时，读取[分类执行](references/failure-classification.md)；两者均未配置时走通用诊断。定制此唯一绑定区的方法见 [README](README.md#企业分类自定义)。
 
 ## 调用参数与报告输出
 
@@ -41,9 +48,16 @@ output_dir: $output_dir
 
 只有请求或可信宿主明确要求另行触发、重跑或继续远端 CI 验证时，才选择 `remote_verify`，并在执行前读取[远端验证](references/remote-verification.md)。运行位置、工具链缺失或原 Job 失败已固化不改变模式；模式未明确时保持 `local_verify`，不发布候选。
 
+## 获取失败证据与领域路由
+
+先按[失败合同与绑定](references/diagnosis-and-repair.md#建立失败合同)核对已有证据；足够时直接诊断，不因原失败来自 CI 就加载平台工具指南。按当前缺口加载：
+
+- **需要补取 CI 日志、运行信息或核对平台身份**：读取 [Provider 访问](references/providers/provider-access.md)，复用本地证据，再按可信选择的 Provider 定向补取。
+- **需要定位日志或补齐上下文**：读取[日志证据提取](references/failure-evidence-extraction.md)。已知对象优先用已有文本工具；需要候选选取、字符限额或结构化记录时，再加载其 Python 工具分支。
+- **缺少源码或业务语义依据**：按[变更上下文与预期行为](references/diagnosis-and-repair.md#变更上下文与预期行为)取证，日志量不能替代目标行为证据。
+
 按实际问题补充指南：
 
-- **外部 CI 证据或远端验证**：读取[Provider 合同](references/provider-contract.md)，确认所需能力；平台名称不证明适配器可用。
 - **依赖声明、解析、获取或制品消费失败**：读取[依赖诊断与修复](references/dependency-diagnosis-and-repair.md)。
 - **Maven 驱动的 Java 主源码或测试源码编译失败**：读取[Java/Maven 指南](references/java-maven-compilation.md)。
 - **C/C++ 预处理、编译、模板、符号、链接或 ABI 失败**：读取[C/C++ 指南](references/c-cpp-compilation.md)。
@@ -58,7 +72,7 @@ output_dir: $output_dir
 
 ## 执行修复流程
 
-1. **诊断**：绑定失败与基线，获取相关变更上下文，形成失败机制、目标行为与约束的有据判断。调查顺序和深度由当前信息缺口决定。
+1. **诊断**：绑定失败与基线，获取相关变更上下文，记录分类、失败机制、目标行为及关键缺口。按缺口补取日志或其他材料，调查顺序和深度由当前问题决定。
 2. **准入**：按[修复依据核查](#修复依据核查)判断并记录决定；只有取得相应准入，才实施依赖该决定的实验、候选修改或发布。
 3. **修改与验证**：按执行指南保留恢复依据、保护原有及并发改动，实施获准候选并完成声明的检查。验证后按[结果判定](references/repair-and-verification.md#结果判定)和[调用限额](references/core-contracts.md#调用身份与限额)决定继续或结束；放弃候选先安全恢复。
 4. **交付**：复核修复依据与准入，按[文字版结果报告](references/result-report.md)交付当前调用的结论、行为依据和实际检查结果；协作暂停与移交按[交互与移交](references/execution-modes.md#交互与移交)处理。

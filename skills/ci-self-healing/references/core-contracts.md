@@ -29,9 +29,11 @@ healing_request:
     parent_ref: optional
   mode: local_verify | remote_verify
   runtime_context: local_checkout | inline_ci_job | terminal_repair
-  provider: auto | github_actions | gitlab_ci | enterprise
+  provider: <稳定 Provider ID，或 auto；例如 github_actions、gitlab_ci、company-ci>
+  provider_reference: optional
   failure_ref:
     run_id: optional
+    run_attempt: optional
     job_id: optional
     task_or_command: optional
   baseline_sha: auto | explicit
@@ -41,6 +43,8 @@ healing_request:
     time_budget: optional
     compute_budget: optional
 ```
+
+`provider` 与可选的 `provider_reference` 是明确请求或可信宿主/配置提供的命名输入，也适用于只读诊断，不增加主入口的位置参数。`auto` 表示尚待确定。需要访问平台时按 [Provider 访问](providers/provider-access.md)解析选择；仅使用已有证据时按[失败绑定](diagnosis-and-repair.md#失败绑定)记录实际来源。
 
 ## 执行身份与协作能力
 
