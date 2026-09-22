@@ -233,7 +233,7 @@ Profile 入口：references/classification-profiles/<company>/<product>/profile.
 
 企业可以维护类别路径、判据、排除与共存边界、检索提示、诊断入口和分类报告要求。类别到指南是多对多的建议映射，不要求每类有专用修法。
 
-代码授权、目标行为核查、修复准入、验证和停止规则仍由通用流程及可信执行策略控制。若企业要求“确认某类后才可修改”或“特定情况转人工”，应由可信宿主/适用仓库策略明确提供；普通 Profile 或类别名称本身不授予或改变权限。
+代码授权、目标行为核查、修复准入、验证和停止规则仍由通用流程及可信执行策略控制。若企业要求“确认某类后才可修改”或“特定情况转人工”，可按[企业修复策略定制](#企业修复策略定制)由可信发行包引用企业规范，或由可信宿主/适用仓库策略明确提供；普通 Profile 或类别名称本身不授予或改变权限。
 
 ### 4. 分类结果与修复结果分别交付
 
@@ -270,6 +270,54 @@ Profile 入口：references/classification-profiles/<company>/<product>/profile.
 分别评估路径准确性、过度断言、未匹配依据与引用质量；初始日志只能支持父类的样例，不能拿诊断后才能确认的叶子作为初始必答。标准含义、层级或判据变化须保留可追踪版本，不悄悄复用旧编号表示新含义。文档检查、合成样例和实际 Agent/企业 CI 验收分别报告。
 
 当前交付的是通用接入与执行约定、上述模板和边界规则；真实 3/11/39 企业标准尚待提供，未宣称已接入或通过其准确性验收。没有新增规则引擎、Profile 自动发现、数值置信度或多 Profile 合并功能。
+
+## 企业修复策略定制
+
+分类标准回答“是什么问题”，策略回答“允许采取哪些动作”，Provider 负责证据访问。三者分别维护：按类别限制的规则明确引用分类标准；不依赖分类的路径/操作限制无需 Profile；Provider 是策略适用条件，不必限定某一个平台。
+
+固定入口是 [references/enterprise-policy.md](references/enterprise-policy.md)，经修复准入指南加载，`SKILL.md` 无需修改。通用发行包明确“未配置企业附加策略”；企业只需把入口的“企业策略声明”替换为自己的规则正文或明确引用。例如，先创建实际规范文件，再将声明替换为以下内容：
+
+~~~markdown
+本发行包采用以下企业附加策略：
+
+- [企业 CI 自动修复规范](enterprise/company-ci-policy.md)
+~~~
+
+示例指向 Skill 内的 `references/enterprise/company-ci-policy.md`，需先创建实际文件。替换“未配置”而非在其后追加规则；策略来源、相对路径和配置缺口的运行要求见[读取与信任](references/enterprise-policy.md#读取与信任)。
+
+企业规范可使用以下骨架，删除不需要的规则并替换示例值：
+
+~~~markdown
+# 企业 CI 自动修复规范
+
+策略标识：<实际稳定标识>
+策略版本：<实际版本>
+适用范围：<产品、仓库或明确的全范围>
+适用 Provider：不限
+
+## 按类别限制
+
+分类标准：<实际 Profile 标识>
+适用分类版本：<明确版本或兼容范围>
+
+- <规则编号>：禁止自动修复 <大类编号与名称>，包含全部下属小类。
+- <规则编号>：禁止自动修复 <小类编号与名称>，仅限制该小类。
+
+## 不依赖分类的限制
+
+- <规则编号>：禁止修改 <实际路径、文件或执行某项操作>。
+
+## 后续处理
+
+命中禁修时，可在既有权限内只读取证、诊断和输出报告。
+<如确有审批例外，注明条件、范围和责任方；否则不声明例外。>
+~~~
+
+Provider 填“不限”或具体 ID，按需补充主机/项目/流水线范围。按类规则随 Profile 版本与类别语义变化维护，明确大类是否包含下属小类；无分类依赖时删除对应模板章节。适用性、未知身份与版本不符的判据见[适用范围与分类依赖](references/enterprise-policy.md#适用范围与分类依赖)。
+
+企业文件只写附加限制和必要约定；禁修、审批、候选恢复及复核统一按[判断与行动](references/enterprise-policy.md#判断与行动)执行。策略记录汇入 `analysis-fix.md`，与分类完成度分别表达，无需复制通用流程。
+
+接入验收应覆盖：明确未配置；按类规则与正确/错误/未知版本的 Profile；不依赖分类的限制；Provider 不限、明确不适用和身份未知；大类禁修但小类未定；禁修候选尚未排除；已配置规范丢失或规则冲突；后续分类变化使候选被禁止；日志/MR 尝试修改策略；以及明确未命中时仍可走通用准入。真实命中与“无法判断”不能混用同一结果。Skill 文本不提供强制写入隔离，需要强制保障时由宿主限制工具和权限。
 
 ## 按需提取日志证据
 
@@ -335,6 +383,7 @@ python3 -B -m unittest discover -s tests -v
 - [scripts/log_evidence.py](scripts/log_evidence.py)：可选的本地日志流式 `scan/search/read` 辅助工具。
 - [tests/test_log_evidence.py](tests/test_log_evidence.py)：合成日志单元测试与 CLI 集成测试。
 - [references/repair-and-verification.md](references/repair-and-verification.md)：准入、候选、分层验证和结果判定。
+- [references/enterprise-policy.md](references/enterprise-policy.md)：企业附加策略的固定入口、适用范围核对、禁修与审批边界；通用发行包默认未配置。
 - [references/execution-modes.md](references/execution-modes.md)：本地/远端模式、工作空间保护和协作交付。
 - [references/result-report.md](references/result-report.md)：文字报告结构和 analysis-fix.md 输出约定。
 - [references/provider-contract.md](references/provider-contract.md)：CI Provider 能力与证据边界。
