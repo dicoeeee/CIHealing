@@ -6,9 +6,9 @@
 
 ## 访问方式与合同的关系
 
-日志和运行信息按 [Provider 访问](providers/provider-access.md)取得：从可信上下文确定需要访问的 Provider，优先复用本地证据，再定向使用该 Provider reference 声明的 MCP 或 CLI。该指南只补充证据获取，不替代本合同中的候选发布、触发、观察和验证能力。
+日志和运行信息的访问选择、CLI 帮助发现与缺口处理统一见 [Provider 访问](providers/provider-access.md)。证据读取不替代本合同中的候选发布、触发、观察和验证能力。
 
-继续使用下方既有能力名称：解析当前失败对应 `identify_run`，检查失败 Job 和 metadata 对应 `inspect_run`，取得日志对应 `fetch_failure_evidence`。它们是逻辑能力，不要求与工具名称一一对应；多个只读调用可以共同满足一项能力。
+下表定义要取得的观察事实或可执行的动作，不要求固定工具名、封装函数或“能力 → 子命令”的逐条映射。Agent 可通过一个或多个获准调用满足当前所需能力，以实际返回的身份、证据和动作结果核对是否满足合同。
 
 ## 能力协商
 
