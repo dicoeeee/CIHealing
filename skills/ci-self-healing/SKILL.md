@@ -74,7 +74,7 @@ output_dir: $output_dir
 
 1. **诊断**：绑定失败与基线，获取相关变更上下文，记录分类、失败机制、目标行为及关键缺口。按缺口补取日志或其他材料，调查顺序和深度由当前问题决定。
 2. **准入**：按[修复依据核查](#修复依据核查)判断并记录决定；只有取得相应准入，才实施依赖该决定的实验、候选修改或发布。
-3. **修改与验证**：按执行指南保留恢复依据、保护原有及并发改动，实施获准候选并完成声明的检查。验证后按[结果判定](references/repair-and-verification.md#结果判定)和[调用限额](references/core-contracts.md#调用身份与限额)决定继续或结束；放弃候选先安全恢复。
+3. **修改与验证**：按执行指南保留恢复依据、保护原有及并发改动，实施获准候选并完成声明的检查。会产生工作空间副产物的诊断或验证，先按[清理与校验](references/workspace-cleanup.md)采集基准，之后由 Agent 清理、脚本校验、Agent 处理差异。按[结果判定](references/repair-and-verification.md#结果判定)和[调用限额](references/core-contracts.md#调用身份与限额)决定继续或结束；放弃候选先安全恢复。
 4. **交付**：复核修复依据与准入，按[文字版结果报告](references/result-report.md)交付当前调用的结论、行为依据和实际检查结果；协作暂停与移交按[交互与移交](references/execution-modes.md#交互与移交)处理。
 
 ## 保持硬边界

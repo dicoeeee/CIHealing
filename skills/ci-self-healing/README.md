@@ -10,7 +10,7 @@
 2. 获取与失败相关的 MR、提交历史、需求/设计材料、测试和实际调用上下文；
 3. 判断目标行为、根因和可行的修复位置；
 4. 在修改前记录修复准入；
-5. 修改工作空间并执行分层验证；
+5. 修改工作空间并执行分层验证，由 Agent 清理验证副产物、脚本检查文件状态；
 6. 输出诊断与修复报告，或在证据不足时停止并说明需要补充什么。
 
 “编译通过”只是验证信号，不等于已经证明修复符合开发者意图。
@@ -346,6 +346,20 @@ python3 -B -m unittest discover -s tests -v
 
 运行在远端 Runner 本身不会自动切换到 remote_verify。
 
+## 验证后的副产物处理
+
+分工为“Agent 判断并清理 → 脚本校验 → Agent 处理结果”。编译前使用 `workspace_check.py capture` 记录已包含修复的文件状态；编译后 Agent 自行清理，再用 `check` 比较新增、缺失、内容和属性变化。脚本不执行编译、删除、恢复或 Patch 提取，也不保存源码备份。
+
+`match` 仅表示声明范围与编译前基准一致，`mismatch` 给出具体差异，`incomplete` 表示无法完整检查。原清单和采集时返回的摘要固定；不能覆盖基准、缩小范围或忽略差异来让检查通过。新候选需要新的基准和受影响验证。操作与失败分支统一见[清理与校验指南](references/workspace-cleanup.md)。
+
+脚本使用 Python 3.9+ 标准库和 POSIX 文件访问能力；不新增 Skill 主入口参数。清单/结果须置于检查范围外，状态目录由 Agent 在获准范围内准备。历史产物、范围外写入、未跟随的链接目标以及外层 Patch 提取逻辑不由该脚本证明安全；它不保证 Agent 必定调用或外层提取器一定停止。
+
+脚本合成工作空间测试与现有日志测试统一运行：
+
+~~~sh
+python3 -B -m unittest discover -s tests -v
+~~~
+
 ## 关键决策原则
 
 - 用户意图和适用契约优先于“最小改动”以及“尽快变绿”。
@@ -382,6 +396,9 @@ python3 -B -m unittest discover -s tests -v
 - [references/log-evidence-tool.md](references/log-evidence-tool.md)：仅选择 Python 辅助工具时读取的操作、输出和预算说明。
 - [scripts/log_evidence.py](scripts/log_evidence.py)：可选的本地日志流式 `scan/search/read` 辅助工具。
 - [tests/test_log_evidence.py](tests/test_log_evidence.py)：合成日志单元测试与 CLI 集成测试。
+- [references/workspace-cleanup.md](references/workspace-cleanup.md)：编译前基准、Agent 清理、脚本校验与差异处置的执行约定。
+- [scripts/workspace_check.py](scripts/workspace_check.py)：只读工作空间 `capture/check` 工具，不编译、不清理、不恢复。
+- [tests/test_workspace_check.py](tests/test_workspace_check.py)：合成工作空间、文件保护与 CLI 校验测试。
 - [references/repair-and-verification.md](references/repair-and-verification.md)：准入、候选、分层验证和结果判定。
 - [references/enterprise-policy.md](references/enterprise-policy.md)：企业附加策略的固定入口、适用范围核对、禁修与审批边界；通用发行包默认未配置。
 - [references/execution-modes.md](references/execution-modes.md)：本地/远端模式、工作空间保护和协作交付。
