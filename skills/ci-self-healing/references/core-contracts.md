@@ -17,7 +17,7 @@
 
 ## Healing Request
 
-以下合同用于修复调用；只读任务不要求建立修复身份或返回修复终局结果，报告输出参数仍按[入口约定](../SKILL.md#调用参数与报告输出)使用。失败事实与诊断记录定义在[建立失败合同](diagnosis-and-repair.md#建立失败合同)。
+以下合同用于修复调用；只读任务不要求建立修复身份或返回修复终局结果，报告输出参数仍按[调用参数解析](invocation-inputs.md)使用。失败事实与诊断记录定义在[建立失败合同](diagnosis-and-repair.md#建立失败合同)。
 
 ```yaml
 healing_request:

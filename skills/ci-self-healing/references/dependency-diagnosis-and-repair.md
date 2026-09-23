@@ -35,7 +35,7 @@
 - **Maven**：按需检查父 POM/BOM、Profile、属性、有效依赖树、scope、仓库与镜像配置及失败阶段的实际产物。区分项目依赖和插件自身依赖，项目的 `dependencyManagement` 不控制插件的传递依赖，不能据项目依赖树推断插件依赖已经正确。[Maven 依赖机制](https://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html)。涉及 Java 编译时结合[Java/Maven 指南](java-maven-compilation.md)核对实际 classpath/module-path 和接口。
 - **C/C++**：结合项目实际使用的包管理声明/锁定、配置、工具链、包查找结果和构建产物。使用 CMake 时区分 `find_package` 的查找来源、实际 package config/Find module 和 imported target，以及从源码引入的依赖；核对实际头文件与库路径，不仅看包名。[CMake 依赖指南](https://cmake.org/cmake/help/latest/guide/using-dependencies/index.html)。涉及编译、链接或 ABI 时结合[C/C++ 指南](c-cpp-compilation.md)。
 
-使用项目已有工具和适用版本，不照搬另一生态或最新版本的解析规则。优先读取已有日志与元数据；解析、安装、查询或生成依赖图的命令也可能联网、写缓存/锁文件或运行插件及脚本，不能仅凭“取证”目的认定为只读。执行权限与副作用遵循[入口边界](../SKILL.md#选择模式)和[工作空间保护](execution-modes.md#基线与候选恢复)，不输出凭据或完整敏感配置。
+使用项目已有工具和适用版本，不照搬另一生态或最新版本的解析规则。优先读取已有日志与元数据；解析、安装、查询或生成依赖图的命令也可能联网、写缓存/锁文件或运行插件及脚本，不能仅凭“取证”目的认定为只读。执行权限与副作用遵循[请求范围](../SKILL.md#1-确认任务与现场)和[工作空间保护](execution-modes.md#基线与候选恢复)，不输出凭据或完整敏感配置。
 
 ## 修复位置与变更影响
 

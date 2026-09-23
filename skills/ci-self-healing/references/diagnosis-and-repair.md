@@ -10,36 +10,11 @@
 
 ## 建立失败合同
 
-在改变日志或工作空间前保留原始失败，记录信号、仓库、基线、环境、输入、影响范围及可用的复现命令或检查。用 `Failure Snapshot` 保存观察事实；预期与实际行为的解释写入诊断评估。
+在改变日志或工作空间前保留原始失败，记录信号、仓库、基线、环境、输入、影响范围及可用的复现命令或检查。用 [Failure Snapshot](#failure-snapshot) 保存观察事实；预期与实际行为的解释写入[诊断评估](#诊断评估字段)。
 
 先复用已有证据，按下方[失败绑定](#失败绑定)确认归属。需要补取 CI 信息或核对平台身份时读取 [Provider 访问](providers/provider-access.md)；访问结果写入此快照或引用已有 Provider 观察，无需另建一份 Failure Evidence 文件。
 
 已取得日志但缺少可用位置或上下文时，按[日志证据提取](failure-evidence-extraction.md)检索和补读；已有片段足够时跳过。工具选择、引用与读取局限统一由该指南定义。
-
-```yaml
-failure_snapshot:
-  repository: <稳定的仓库身份>
-  baseline_sha: <准确的 Git 提交基线>
-  provider_run:
-    provider: <原失败的 Provider；纯本地失败用 local，来源未确认用 unknown>
-    pipeline_id: optional
-    run_id: optional
-    run_attempt: optional
-    job_id: optional
-    task_id: optional
-  failure:
-    command: optional
-    exit_code: optional
-    error_refs: []
-    log_refs: []
-    artifact_refs: []
-  environment:
-    execution_context: <local 或 CI 身份>
-    tool_versions: {}
-  recent_changes: []
-  completeness: complete | incomplete
-  observed_at: <时间戳>
-```
 
 快照记录观察到的事实，不记录根因或修复结论。`recent_changes` 与证据引用记录失败源码状态对应的 MR 或提交范围、相关历史和特性材料来源；预期行为的推断写入诊断评估。`incomplete` 永远不表示健康。影响诊断或必要验证的材料缺口按[自主推进与停止](diagnosis-and-repair.md#自主推进与停止)处理。
 
@@ -70,19 +45,11 @@ failure_snapshot:
 
 ## 定位但不过度声称因果
 
-将这些层级作为报告词汇，而不是强制检查清单：
-
-| 层级 | 含义 |
-| --- | --- |
-| L0 Signal | 已识别失败的检查、告警或症状 |
-| L1 Execution | 已识别失败的工作流、作业、步骤、任务或命令 |
-| L2 Code | 已识别相关仓库、文件、类、函数或代码行 |
-| L3 Boundary | 已识别第一个发生偏离的数据、状态或组件边界 |
-| L4 Cause | 某个机制得到可证伪实验、对照、追踪或等价证据的支持 |
-
-日志和 `file:line` 通常只能支持 L1 或 L2，不能自动建立 L4。
+按证据区分错误位置与失败机制。需要表达定位深度时使用[定位层级](#定位层级)；日志和 `file:line` 通常只能支持 L1 或 L2，不能自动建立 L4。层级是报告词汇，不是逐层完成的调查步骤。
 
 根据当前证据和信息缺口选择方法，例如检查可行动错误附近的代码、最小复现、成功与失败对照、diff 或 bisect、聚焦插桩、上游追踪，以及从测试、历史、规范或 ADR 重建意图。这些是可选手段，不是固定顺序或必走清单；假设数量和调查范围由问题决定，不要求每次都完整扫描仓库、重复复现或执行所有工具。
+
+所选诊断命令会写入文件时，只读任务不执行；修复任务先按[主流程的实验准入分支](../SKILL.md#3-判断修复准入)满足准入、恢复和适用的清理基准要求，执行后处理改动及副产物，再回到诊断。不能因动作名为查询、复现或取证就按只读处理。
 
 未选定 Profile 时，通用错误分类可以暂定、交叉、随证据修正或在结果报告时归纳；已选定时，遵循[分类标准边界](failure-classification.md#分类标准边界)及初始/最终分类记录要求，不用通用标签替代标准分类，也不等报告阶段倒填初始判断。类别本身不能证明根因。在修复请求中，完成与该修复有关的上下文确认且满足准入条件后，局部错误可以直接构造候选并验证；调查深度随问题和剩余信息缺口调整。
 
@@ -156,6 +123,47 @@ failure_snapshot:
 历史 Case 只提供假设、负向约束和验证线索。使用 `Retrieve -> Compare -> Adapt -> Verify`，绝不要将旧 Patch 重放为当前修复。
 
 ## 记录诊断评估
+
+以下字段表达已有事实和判断，按需要引用或简写；不要求为了填写示例新增记录文件，也不以字段齐全证明调查完成。
+
+### Failure Snapshot
+
+```yaml
+failure_snapshot:
+  repository: <稳定的仓库身份>
+  baseline_sha: <准确的 Git 提交基线>
+  provider_run:
+    provider: <原失败的 Provider；纯本地失败用 local，来源未确认用 unknown>
+    pipeline_id: optional
+    run_id: optional
+    run_attempt: optional
+    job_id: optional
+    task_id: optional
+  failure:
+    command: optional
+    exit_code: optional
+    error_refs: []
+    log_refs: []
+    artifact_refs: []
+  environment:
+    execution_context: <local 或 CI 身份>
+    tool_versions: {}
+  recent_changes: []
+  completeness: complete | incomplete
+  observed_at: <时间戳>
+```
+
+### 定位层级
+
+| 层级 | 含义 |
+| --- | --- |
+| L0 Signal | 已识别失败的检查、告警或症状 |
+| L1 Execution | 已识别失败的工作流、作业、步骤、任务或命令 |
+| L2 Code | 已识别相关仓库、文件、类、函数或代码行 |
+| L3 Boundary | 已识别第一个发生偏离的数据、状态或组件边界 |
+| L4 Cause | 某个机制得到可证伪实验、对照、追踪或等价证据的支持 |
+
+### 诊断评估字段
 
 ```yaml
 diagnosis:
