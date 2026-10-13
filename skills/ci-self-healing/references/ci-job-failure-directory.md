@@ -20,7 +20,7 @@ output_dir: /path/to/healing-output
 /ci-self-healing "/path/to/failure-scene" "/path/to/healing-output"
 ```
 
-上述路径须替换为实际值；位置绑定、命名输入、缺省与无效值及相对路径按[调用参数解析](invocation-inputs.md)处理，不新增场景专用解析器。输出目录的安全写入按[报告输出方式](result-report.md#输出方式)处理。
+上述路径须替换为实际值；位置绑定、命名输入、缺省与无效值及相对路径按[调用参数解析](invocation-inputs.md)处理，不新增场景专用解析器。输出目录的安全写入按[报告输出方式](output-delivery.md#输出方式)处理。
 
 `work_dir` 是现场入口，不必是 Git 仓库根或构建命令执行目录。修改源码前确认现场可读、实际源码可在授权范围内修改，且输出目录可安全创建或写入。上述前提无法确认或路径存在关键歧义时，按[自主推进与停止](diagnosis-and-repair.md#自主推进与停止)处理；即使无法修复，仍按报告规范交付已知事实与缺口。
 

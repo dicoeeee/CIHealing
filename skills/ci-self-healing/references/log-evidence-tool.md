@@ -4,13 +4,13 @@
 
 ## 调用
 
-从 Skill 根目录运行；其他目录使用脚本实际绝对路径。参数、默认值与限额查对应子命令的 `--help`：
+通过宿主指定的脚本工具执行 `scripts/log_evidence.py`，输入日志使用实际绝对路径。参数、默认值与限额查对应子命令的 `--help`。以下每行是一组有序参数，不是 shell 命令：
 
-```sh
-python3 scripts/log_evidence.py scan --help
-python3 scripts/log_evidence.py scan --log /path/to/all_logs.txt
-python3 scripts/log_evidence.py search --log /path/to/all_logs.txt --literal 'generated/api.h'
-python3 scripts/log_evidence.py read --log /path/to/all_logs.txt --start-line 78010 --end-line 78055
+```json
+["scan", "--help"]
+["scan", "--log", "/path/to/all_logs.txt"]
+["search", "--log", "/path/to/all_logs.txt", "--literal", "generated/api.h"]
+["read", "--log", "/path/to/all_logs.txt", "--start-line", "78010", "--end-line", "78055"]
 ```
 
 | 操作 | 返回及局限 |

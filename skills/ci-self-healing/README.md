@@ -409,19 +409,23 @@ python3 -B -m unittest discover -s tests -v
 ## 目录说明
 
 - [SKILL.md](SKILL.md)：Agent 执行入口和硬边界。
-- [references/diagnosis-and-repair.md](references/diagnosis-and-repair.md)：失败合同、上下文取证、意图判断和停止规则。
+- [references/diagnosis-and-repair.md](references/diagnosis-and-repair.md)：只读与修复共用的失败合同、上下文取证、机制判断和停止规则。
+- [references/repair-basis.md](references/repair-basis.md)：修复准入前读取的目标行为、位置取舍、反证、语义歧义与完整候选缺口判据。
 - [references/failure-classification.md](references/failure-classification.md)：可信 Profile 的分类执行、证据判定、修正和修复边界；企业维护模板见上方自定义指导。
 - [references/failure-evidence-extraction.md](references/failure-evidence-extraction.md)：分类与诊断共用的按需日志检索、补读与引用规则。
 - [references/log-evidence-tool.md](references/log-evidence-tool.md)：仅选择 Python 辅助工具时读取的操作、输出和预算说明。
 - [scripts/log_evidence.py](scripts/log_evidence.py)：可选的本地日志流式 `scan/search/read` 辅助工具。
 - [tests/test_log_evidence.py](tests/test_log_evidence.py)：合成日志单元测试与 CLI 集成测试。
-- [references/workspace-cleanup.md](references/workspace-cleanup.md)：编译前基准、Agent 清理、脚本校验与差异处置的执行约定。
+- [references/workspace-cleanup.md](references/workspace-cleanup.md)：编译前基准、正常清理、脚本校验与差异路由。
+- [references/workspace-recovery.md](references/workspace-recovery.md)：漏采/误采恢复、候选撤销和状态文件异常，仅在对应分支读取。
 - [scripts/workspace_check.py](scripts/workspace_check.py)：只读工作空间 `capture/check` 工具，不编译、不清理、不恢复。
 - [tests/test_workspace_check.py](tests/test_workspace_check.py)：合成工作空间、文件保护与 CLI 校验测试。
 - [references/repair-and-verification.md](references/repair-and-verification.md)：准入、候选、分层验证和结果判定。
 - [references/enterprise-policy.md](references/enterprise-policy.md)：企业附加策略的固定入口、适用范围核对、禁修与审批边界；通用发行包默认未配置。
 - [references/execution-modes.md](references/execution-modes.md)：本地/远端模式、工作空间保护和协作交付。
-- [references/result-report.md](references/result-report.md)：文字报告结构和 analysis-fix.md 输出约定。
+- [references/output-delivery.md](references/output-delivery.md)：报告目录、同名文件保护、工作空间布局与文件交付降级。
+- [references/result-report.md](references/result-report.md)：最终报告填写、条件裁剪和交付校验；模板及六章格式保持不变。
+- [assets/execution-resources.json](assets/execution-resources.json)：宿主执行审计的资源布局声明，不作为 Agent 的额外必读资源。当前布局使用 v3；旧冻结包没有此声明时按 v2 选择，新布局缺少声明或必要资源会拒绝审计，不以旧要求降级。历史记录仍使用自身声明的合同。
 - [references/provider-contract.md](references/provider-contract.md)：CI Provider 能力与证据边界。
 - [references/providers/provider-access.md](references/providers/provider-access.md)：Provider 选择与权限、本地/MCP/CLI 访问和证据交回规则。
 - [references/providers/github-actions.md](references/providers/github-actions.md)：GitHub Actions 的身份核对与只读接入示例。
@@ -429,6 +433,20 @@ python3 -B -m unittest discover -s tests -v
 - [references/c-cpp-compilation.md](references/c-cpp-compilation.md)：C/C++ 专项指导。
 - [references/dependency-diagnosis-and-repair.md](references/dependency-diagnosis-and-repair.md)：依赖问题专项指导。
 - [references/ci-job-failure-directory.md](references/ci-job-failure-directory.md)：企业 CI Job 失败现场目录约定。
+
+## 运行规则归属与离线维护
+
+| 规则 | 权威正文 | 读取时机 |
+| --- | --- | --- |
+| 失败绑定、主动取证与停止取证 | `references/diagnosis-and-repair.md` | 只读或修复诊断 |
+| 目标行为、语义分歧与完整候选缺口 | `references/repair-basis.md` | 写入式实验或候选准入评估前 |
+| 准入决定、验证计划与结果判定 | `references/repair-and-verification.md` | 修复分支的相关动作前 |
+| 正常清理与校验 | `references/workspace-cleanup.md` | 首次写入式实验或构建前 |
+| 基准恢复、候选撤销与状态文件异常 | `references/workspace-recovery.md` | 对应异常分支，恢复/重采/撤销前 |
+| 输出路径与布局 | `references/output-delivery.md` | 使用报告目录前 |
+| 报告填写、条件裁剪与校验 | `references/result-report.md` 与报告模板 | 最终交付时 |
+
+修改文件划分时，同步更新宿主的执行资源审计和评审摘录映射，并验证漏读、截断及事后补读仍不能满足动作前要求。包内 `arguments` 是既有宿主扩展，通用 `quick_validate.py` 的字段白名单不包含它；维护时保留双参数接口，分别核对 frontmatter 解析、原有绑定规则、报告格式、资源引用与离线行为测试，不以删除接口换取通用校验通过。
 
 ## 重要提醒
 

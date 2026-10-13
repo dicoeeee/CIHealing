@@ -1,0 +1,12 @@
+{
+  "backend": "native",
+  "chrys": "/absolute/path/to/icode",
+  "python": "/absolute/path/to/icode-tui/bin/python",
+  "maven": "/absolute/path/to/mvn",
+  "java_home": "/absolute/path/to/jdk/Contents/Home",
+  "maven_repository": "/absolute/repo/evals/ci-self-healing/runs/native-cache/repository",
+  "model_profile": "/absolute/home/.chrys/models/selected-glm52.yaml",
+  "endpoint_host": "approved-gateway.example.invalid",
+  "timeout_seconds": 600,
+  "max_tool_calls": 80
+}

@@ -1,0 +1,15 @@
+{
+  "output_root": "runs/batches",
+  "runtime": "/absolute/path/to/isolated-repair-runtime.json",
+  "backend": "native",
+  "reviewer": {
+    "chrys": "/absolute/path/to/icode",
+    "python": "/absolute/path/to/icode-tui/bin/python",
+    "profile": "/absolute/home/.chrys/models/selected-glm53.yaml",
+    "endpoint_host": "approved-gateway.example.invalid",
+    "timeout_seconds": 900,
+    "max_packet_bytes": 524288
+  },
+  "max_agent_invocations": 36,
+  "max_wall_seconds": 14400
+}

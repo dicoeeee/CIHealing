@@ -1,0 +1,9 @@
+{
+  "image": "registry.example.invalid/ci-skill-eval@sha256:REPLACE_WITH_REAL_IMAGE_DIGEST",
+  "network": "ci-eval-internal",
+  "chrys_config_dir": "/absolute/path/to/isolated-chrys-profiles",
+  "agent": "EvalCode",
+  "expected_model_id": "glm-5.2",
+  "timeout_seconds": 600,
+  "max_tool_calls": 80
+}
