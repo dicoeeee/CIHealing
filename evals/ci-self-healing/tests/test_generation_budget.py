@@ -110,7 +110,7 @@ class GenerationBudgetTests(unittest.TestCase):
             with mock.patch('native_repair.ROOT', root):
                 config = load_config(original)
                 self.assertNotIn('repair_max_output_tokens', config)
-                self.assertEqual(config['timeout_seconds'], 600)
+                self.assertEqual(config['timeout_seconds'], 900)
                 for old_value in (8192, False, None):
                     with self.assertRaisesRegex(EvalError, 'no longer supported'):
                         load_config({**original, 'repair_max_output_tokens': old_value})

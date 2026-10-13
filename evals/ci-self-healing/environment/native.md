@@ -36,6 +36,8 @@ EVAL_ENV=/absolute/repo/evals/ci-self-healing/runs/native-environment
 
 将 `batch.example.json` 复制为本机配置，保持 `backend: native`，填入上一步 runtime、所选 iCode/Python、显式选定的 GLM 5.3 评审 profile 和获准 endpoint。配置只存路径与非秘密参数，不存凭据。无需 `docker_context`、容器网络或宿主 `CHRYS_EVAL_API_KEY`。
 
+新配置默认 `max_parallel_trials: 3`，三个试次各自保留独立现场、缓存副本、网关和会话目录，单个试次内部按自愈、验证、评审顺序执行；可设为 1 保持串行。环境准备器生成的 GLM 5.2 自愈时限为 900 秒，GLM 5.3 评审仍为 900 秒。并发不增加全批会话预算，也不把墙钟预算复制成每线程一份。更换调度配置须新建批次，历史快照不修改；详见[并发与预算说明](../README.md#三用例并发与自愈时限)。
+
 ```bash
 "$EVAL_PYTHON" -B evals/ci-self-healing/eval.py doctor --runtime "$EVAL_ENV/runtime.json"
 "$EVAL_PYTHON" -B evals/ci-self-healing/eval.py test --config /absolute/path/batch.local.json --plan

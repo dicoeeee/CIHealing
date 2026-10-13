@@ -17,7 +17,7 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
-from common import HOST_CLOCK_ID, EvalError, changes, command, digest, json_bytes, read_json, read_regular, remaining_timeout, run_logged, snapshot, stop_owned_group, write_json, write_new
+from common import bind_json, HOST_CLOCK_ID, EvalError, changes, command, digest, json_bytes, read_json, read_regular, remaining_timeout, run_logged, snapshot, stop_owned_group, write_json, write_new
 from host_sandbox import environment as child_env, policy
 from repair_support import ADAPTER_FILES, RUNTIME_CONTRACT, execution_contract, DELIVERY_CONTRACT, budget_notice, session_receipt
 from suite import ROOT, load_suite, select_trials, skill_from_dir
@@ -60,7 +60,7 @@ def load_config(value):
     cache = Path(config["maven_repository"])
     if ROOT / "runs" not in cache.parents or not cache.is_dir():
         raise EvalError("use an explicit dedicated Maven cache under evals/ci-self-healing/runs; never expose ~/.m2")
-    config.setdefault("timeout_seconds", 600)
+    config.setdefault("timeout_seconds", 900)
     config.setdefault("max_tool_calls", 80)
     for key, maximum in (("timeout_seconds", 1800), ("max_tool_calls", 200)):
         if type(config[key]) is not int or not 1 <= config[key] <= maximum:
@@ -367,11 +367,7 @@ def run_trials(root, config, trial_id=None):
     budget = generation_budget(model)
     binding = {"backend": "native", "environment": environment, "config": config, "profile_sha256": profile_hash}
     path = root / "runtime-binding.json"
-    if path.exists():
-        if read_json(path) != binding:
-            raise EvalError("native runtime drift; create a new suite")
-    else:
-        write_json(path, binding)
+    bind_json(path, binding, "native runtime drift; create a new suite")
     summaries = []
     for row in select_trials(manifest, trial_id):
         trial = root / "trials" / row["id"]

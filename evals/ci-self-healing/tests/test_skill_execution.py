@@ -219,6 +219,42 @@ class SkillExecutionTests(unittest.TestCase):
         self.workspace("capture"); self.build(); self.clean(); self.workspace("check")
         self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-basis.md", self.checks())
 
+    def candidate_and_verified_cleanup(self):
+        self.call("edit_file", {"path": "Example.java"}, "done",
+                  lambda: (self.repo / "src/main/java/Example.java").write_text("class Changed {}"))
+        self.workspace("capture"); self.build(); self.clean(); self.workspace("check")
+
+    def test_specialist_and_basis_do_not_replace_common_diagnosis_read(self):
+        self.events = []
+        for name in ("SKILL.md", "references/java-maven-compilation.md", "references/repair-basis.md",
+                     "references/repair-and-verification.md", "references/workspace-cleanup.md"):
+            self.load_resource(name)
+        self.candidate_and_verified_cleanup()
+        result = self.audit()
+        self.assertEqual(result["workspace_checks"][-1]["result"], "match")
+        self.assertEqual([f["check"] for f in result["failures"]],
+                         ["required_skill_resource_not_loaded_before_action:references/diagnosis-and-repair.md"])
+
+    def test_truncated_diagnosis_read_still_blocks_candidate(self):
+        self.truncate_resource("references/diagnosis-and-repair.md")
+        self.candidate_and_verified_cleanup()
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/diagnosis-and-repair.md", self.checks())
+
+    def test_late_diagnosis_read_does_not_erase_prior_candidate_violation(self):
+        self.truncate_resource("references/diagnosis-and-repair.md")
+        self.candidate_and_verified_cleanup()
+        original = self.audit()["failures"]
+        self.load_resource("references/diagnosis-and-repair.md")
+        self.assertEqual(self.audit()["failures"], original)
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/diagnosis-and-repair.md", self.checks())
+
+    def test_complete_diagnosis_reread_before_candidate_satisfies_existing_gate(self):
+        self.truncate_resource("references/diagnosis-and-repair.md")
+        self.load_resource("references/diagnosis-and-repair.md")
+        self.candidate_and_verified_cleanup()
+        self.assertEqual(self.audit()["failures"], [])
+        self.assertEqual(self.audit()["gaps"], [])
+
     def test_recovery_read_must_be_complete_and_precede_recapture(self):
         self.late_candidate(); self.complete_recovery()
         self.truncate_resource("references/workspace-recovery.md")

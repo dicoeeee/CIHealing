@@ -12,7 +12,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from batch import execute_batch, make_plan, new_run, run_lock, stage_paths, write_reports
-from common import BudgetExhausted, EvalError, digest, read_json, read_regular, run_logged, snapshot, wall_budget, write_json, write_new
+from common import BudgetExhausted, EvalError, bind_json, digest, read_json, read_regular, run_logged, snapshot, wall_budget, write_json, write_new
 from eval import main
 from native_runner import exchange_receipt, policy, validate_native_artifacts
 from suite import load_suite, REPO
@@ -36,7 +36,7 @@ def wire(rows):
     return ('\n'.join(json.dumps(r) for r in rows) + '\n').encode()
 
 
-class BatchTests(unittest.TestCase):
+class BatchFixture:
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='ci-batch-tests-')
         self.addCleanup(self.temp.cleanup)
@@ -84,8 +84,7 @@ class BatchTests(unittest.TestCase):
         row = self.row(root, tid)
         self.calls.append(('review', row['case'], tid))
         b = Path(root) / 'reviewer-binding.json'
-        if not b.exists():
-            write_json(b, {'synthetic': True})
+        bind_json(b, {'synthetic': True}, 'synthetic reviewer drift')
         write_json(Path(root) / 'trials' / tid / 'review.json', {
             'status': 'validated', 'requested_model': 'glm-5.3', 'verdict': {'verdict': 'pass'},
             'process': {'returncode': 0}, 'reviewer_binding_sha256': digest(read_regular(b)),
@@ -94,6 +93,8 @@ class BatchTests(unittest.TestCase):
     def create(self, preset='smoke', mode='single'):
         return new_run(self.config, make_plan(self.config, self.candidate, mode, preset))
 
+
+class BatchTests(BatchFixture, unittest.TestCase):
     def test_whole_suite_runs_twice_with_fresh_ids_and_workspaces(self):
         first = self.create()
         a = execute_batch(first, self.config)
@@ -139,6 +140,7 @@ class BatchTests(unittest.TestCase):
             if self.row(root, tid)['case'] != 'case-003':
                 return original(root, runtime, tid)
             self.calls.append(('run', 'case-003', tid))
+            write_json(Path(root) / 'trials' / tid / 'after-run.json', snapshot(Path(root) / 'trials' / tid / 'visible'))
             write_json(Path(root) / 'trials' / tid / 'run.json', {
                 'status': 'timeout', 'process': {'status': 'timeout', 'returncode': 130, 'cleanup': {'status': 'confirmed'}},
                 'isolation_confirmed': True, 'filesystem_status': 'captured',

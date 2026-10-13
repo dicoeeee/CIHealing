@@ -1,4 +1,4 @@
-"""Serial suite orchestration: immutable attempts, safe resume, bounded spend.
+"""Bounded parallel suite orchestration: immutable attempts and shared budgets.
 
 One entrypoint owns the whole suite, not a shell loop over handpicked cases.
 Completed evidence is checked on resume; uncertain attempts are never replayed.
@@ -12,11 +12,14 @@ import subprocess
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from contextlib import contextmanager, nullcontext
+from contextvars import copy_context
 from datetime import datetime, timezone
+from threading import Event, Lock
 
 from common import (BudgetExhausted, EvalError, digest, json_bytes, read_json, read_regular,
-                    replace_json, wall_budget, write_json)
+                    replace_json, remaining_timeout, wall_budget, write_json)
 from cases import CASES
 from grading import grade, summarize, validate_grade_binding
 from native_runner import load_native, native_identity, native_preflight, native_review
@@ -30,7 +33,7 @@ def load_config(path):
     path = Path(path).absolute()
     value = read_json(path)
     required = {"output_root", "runtime", "reviewer"}
-    optional = {"backend", "docker_context", "max_agent_invocations", "max_wall_seconds", "stop_after_transport_errors"}
+    optional = {"backend", "docker_context", "max_agent_invocations", "max_wall_seconds", "stop_after_transport_errors", "max_parallel_trials"}
     if not isinstance(value, dict) or required - value.keys() or value.keys() - required - optional:
         raise EvalError("batch config requires output_root/runtime/docker_context/reviewer; unknown fields are rejected")
     value = dict(value)
@@ -46,7 +49,7 @@ def load_config(path):
     if value["backend"] == "docker" and not re.fullmatch(r"[A-Za-z0-9_.-]+", value.get("docker_context", "")):
         raise EvalError("invalid Docker context")
     for key, default, cap in (("max_agent_invocations", 36, 200), ("max_wall_seconds", 14400, 86400),
-                               ("stop_after_transport_errors", 2, 10)):
+                               ("stop_after_transport_errors", 2, 10), ("max_parallel_trials", 3, 3)):
         # Legacy threshold remains parseable for local configs, but the typed
         # failure policy below supersedes counting arbitrary nonzero exits.
         value.setdefault(key, default)
@@ -73,6 +76,8 @@ def make_plan(config, candidate, mode="single", preset="smoke", baseline_ref="HE
             "trial_count": count, "maximum_agent_invocations": count * 2,
             "budget_agent_invocations": config["max_agent_invocations"],
             "budget_wall_seconds": config["max_wall_seconds"],
+            "max_parallel_trials": config.get("max_parallel_trials", 1),
+            "scheduler": "parallel-waves-v1: one stage per trial per wave; coordinator reserves all calls",
             "failure_policy": "typed-v1: isolated case budgets continue; unknown/shared/safety failures stop",
             "legacy_transport_threshold": "accepted for config compatibility; no longer used to classify nonzero exits",
             "reviewer": "Chrys native GLM 5.3", "models_called": False}
@@ -252,6 +257,154 @@ def can_review_artifact(root, trial_id, stage, outcome):
     return reviewable_timeout(read_json(Path(root) / "suite/trials" / trial_id / "run.json"))
 
 
+class StopRequest:
+    """First stop cause wins; workers observe it without mutating shared budgets."""
+    def __init__(self):
+        self.event, self.lock = Event(), Lock()
+        self.reason, self.scope = None, None
+
+    def is_set(self):
+        return self.event.is_set()
+
+    def request(self, reason, scope):
+        with self.lock:
+            if not self.is_set():
+                self.reason, self.scope = reason, scope
+                self.event.set()
+
+
+def next_stage(root, row):
+    """Only called at a wave boundary, with no worker writing trial evidence."""
+    trial_id = row["id"]
+    for stage in ("run", "grade", "review"):
+        state = stage_state(root, trial_id, stage)
+        if state == "completed":
+            completed_evidence(root, trial_id, stage)
+            prior = read_json(stage_paths(root, trial_id, stage)[1]).get("failure")
+            if prior and not can_review_artifact(root, trial_id, stage, prior):
+                return None
+            continue
+        if state != "pending":
+            return None  # Never replay uncertain, interrupted, or failed attempts.
+        if stage == "review" and read_json(root / "suite/trials" / trial_id / "grade.json")["status"] != "awaiting_review":
+            return None
+        return stage
+    return None
+
+
+def execute_stage(root, row, stage, config, identity, stop):
+    """One already-reserved stage; all artifacts remain scoped to this trial."""
+    trial_id = row["id"]
+    tick = time.monotonic()
+    result = {"status": "error"}
+    try:
+        remaining_timeout(1)
+        if stage == "run":
+            run_trials(root / "suite", config["runtime"], trial_id)
+        elif stage == "grade":
+            grade(root / "suite", config["runtime"], trial_id)
+        else:
+            native_review(root / "suite", trial_id, root / "reviews" / trial_id, config["reviewer"], identity)
+        artifact = root / "suite/trials" / trial_id / (stage + ".json")
+        result = {"status": "completed", "artifact_sha256": digest(read_regular(artifact))}
+        data = read_json(artifact)
+        result["failure"] = classify_grade(data) if stage == "grade" else classify_execution(data, stage)
+    except KeyboardInterrupt:
+        cancelled = stop.is_set()
+        scope = "operator" if not cancelled or stop.scope == "operator" else "coordinator"
+        result = {"status": "interrupted", "error": "batch cancelled" if cancelled else "operator interrupted; attempt is not replayable",
+                  "failure": failure("batch_cancelled" if cancelled else "operator_interrupted", scope, "stop")}
+    except BaseException as exc:
+        budget = isinstance(exc, BudgetExhausted)
+        result = {"status": "error", "error": str(exc),
+                  "failure": failure("batch_budget_exhausted" if budget else "framework_error_unclassified",
+                                     "budget" if budget else "unknown", "stop")}
+    finally:
+        result["elapsed_seconds"] = round(time.monotonic() - tick, 3)
+        write_json(stage_paths(root, trial_id, stage)[1], result)
+    outcome = result.get("failure")
+    if outcome and outcome["batch_action"] == "stop":
+        stop.request("execution stopped (" + outcome["scope"] + "): " + outcome["code"], outcome["scope"])
+    return result
+
+
+def execute_waves(root, config, descriptor, runtime, identity, segment, stop):
+    """A single coordinator reserves starts; workers never dispatch paid work.
+
+    No queued stages beyond the worker limit. Drain each wave before inspecting
+    shared summaries or advancing any trial; partial JSON is never scored.
+    """
+    limit = config.get("max_parallel_trials", 1)
+    if type(limit) is not int or not 1 <= limit <= 3:
+        raise EvalError("invalid max_parallel_trials")
+    rows = load_suite(root / "suite")["trials"]
+    reserved = sum(1 for p in (root / "journal").glob("*/*.started.json")
+                   if p.name in ("run.started.json", "review.started.json"))
+    wave = 0
+    with ThreadPoolExecutor(max_workers=limit, thread_name_prefix="ci-trial") as pool:
+        while not stop.is_set():
+            ready = [(row, next_stage(root, row)) for row in rows]
+            ready = [(row, stage) for row, stage in ready if stage is not None]
+            if not ready:
+                return
+            # Even with no paid slots, completed repairs may still be graded.
+            slots = config["max_agent_invocations"] - reserved
+            selected = []
+            for row, stage in ready:
+                if stage in {"run", "review"}:
+                    if slots <= 0:
+                        continue
+                    slots -= 1
+                selected.append((row, stage))
+                if len(selected) == limit:
+                    break
+            if not selected:
+                raise BudgetExhausted("agent invocation budget exhausted")
+            wave += 1
+            pending = set()
+            try:
+                for row, stage in selected:
+                    if stop.is_set():
+                        break
+                    if descriptor["engine_sha256"] != engine_digest():
+                        raise EvalError("evaluation engine changed during execution")
+                    if load_runtime(config["runtime"]) != runtime or native_identity(config["reviewer"]) != identity:
+                        raise EvalError("shared runtime/model configuration changed during execution")
+                    remaining_timeout(1)
+                    paid = stage in {"run", "review"}
+                    start = {"stage": stage, "trial_id": row["id"], "started_at": datetime.now(timezone.utc).isoformat(),
+                             "segment": segment, "wave": wave, "max_parallel_trials": limit}
+                    if paid:
+                        start["agent_invocation_ordinal"] = reserved + 1
+                    write_json(stage_paths(root, row["id"], stage)[0], start)
+                    reserved += int(paid)  # Journal reservation BEFORE submission; never refunded.
+                    print(json.dumps({"trial": row["id"], "case": row["case"], "version": row["version"], "stage": stage}),
+                          file=sys.stderr, flush=True)
+                    pending.add(pool.submit(copy_context().run, execute_stage, root, row, stage, config, identity, stop))
+            except KeyboardInterrupt:
+                stop.request("operator interrupted; reserved attempts will not be replayed", "operator")
+            except BaseException as exc:
+                stop.request(str(exc) or type(exc).__name__, "unknown")
+            # A stop cancels live process groups cooperatively, then waits for
+            # their existing gateway/resource cleanup and immutable receipts.
+            while pending:
+                try:
+                    done, _ = wait(pending, timeout=0.05, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        pending.remove(future)
+                        future.result()
+                except KeyboardInterrupt:
+                    stop.request("operator interrupted; reserved attempts will not be replayed", "operator")
+                except BaseException as exc:
+                    stop.request(str(exc) or type(exc).__name__, "unknown")
+            if not stop.is_set():
+                write_reports(root)
+            # Final reporting runs outside the cancelled execution scope. Its
+            # read-only Git binding checks must not turn a peer fault into an
+            # apparent operator interruption or invalidate completed evidence.
+        raise EvalError(stop.reason)
+
+
 def execute_batch(root, config):
     root = Path(root).absolute()
     descriptor = read_json(root / "batch.json")
@@ -280,8 +433,9 @@ def execute_batch(root, config):
         began = time.monotonic()
         write_json(root / "segments" / (segment + ".started.json"), {"started_at": datetime.now(timezone.utc).isoformat()})
         reason = None
+        stop = StopRequest()
         try:
-            with wall_budget(remaining):
+            with wall_budget(remaining, cancellation=stop):
                 if not native and not os.environ.get("CHRYS_EVAL_API_KEY"):
                     raise EvalError("repair gateway token environment CHRYS_EVAL_API_KEY is missing")
                 runtime = load_runtime(config["runtime"])
@@ -296,70 +450,7 @@ def execute_batch(root, config):
                         raise EvalError("shared runtime/model environment drift")
                 else:
                     write_json(path, env_binding)
-                for row in load_suite(root / "suite")["trials"]:
-                    trial_id = row["id"]
-                    trial = root / "suite/trials" / trial_id
-                    for stage in ("run", "grade", "review"):
-                        if descriptor["engine_sha256"] != engine_digest():
-                            raise EvalError("evaluation engine changed during execution")
-                        if load_runtime(config["runtime"]) != runtime or native_identity(config["reviewer"]) != identity:
-                            raise EvalError("shared runtime/model configuration changed during execution")
-                        state = stage_state(root, trial_id, stage)
-                        if state == "completed":
-                            completed_evidence(root, trial_id, stage)
-                            prior = read_json(stage_paths(root, trial_id, stage)[1]).get("failure")
-                            if prior and not can_review_artifact(root, trial_id, stage, prior):
-                                break  # Never replay; only explicitly bounded artifact review.
-                            continue
-                        if state in {"uncertain", "error", "interrupted"}:
-                            # Never spend again on a partially observed attempt.
-                            break
-                        if stage == "review" and read_json(trial / "grade.json")["status"] != "awaiting_review":
-                            break
-                        if stage in {"run", "review"}:
-                            reserved = sum(1 for p in (root / "journal").glob("*/*.started.json") if p.name in ("run.started.json", "review.started.json"))
-                            if reserved >= config["max_agent_invocations"]:
-                                raise BudgetExhausted("agent invocation budget exhausted")
-                        started, finished = stage_paths(root, trial_id, stage)
-                        from common import remaining_timeout
-                        remaining_timeout(1)
-                        write_json(started, {"stage": stage, "trial_id": trial_id, "started_at": datetime.now(timezone.utc).isoformat()})
-                        print(json.dumps({"trial": trial_id, "case": row["case"], "version": row["version"], "stage": stage}), file=sys.stderr, flush=True)
-                        tick = time.monotonic()
-                        result = {"status": "error"}
-                        try:
-                            if stage == "run":
-                                run_trials(root / "suite", config["runtime"], trial_id)
-                            elif stage == "grade":
-                                grade(root / "suite", config["runtime"], trial_id)
-                            else:
-                                native_review(root / "suite", trial_id, root / "reviews" / trial_id, config["reviewer"], identity)
-                            artifact = trial / (stage + ".json")
-                            result = {"status": "completed", "artifact_sha256": digest(read_regular(artifact))}
-                            data = read_json(artifact)
-                            if stage in {"run", "review"}:
-                                result["failure"] = classify_execution(data, stage)
-                            elif stage == "grade":
-                                result["failure"] = classify_grade(data)
-                        except KeyboardInterrupt:
-                            result = {"status": "interrupted", "error": "operator interrupted; attempt is not replayable"}
-                            result["failure"] = failure("operator_interrupted", "operator", "stop")
-                            raise
-                        except (EvalError, OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
-                            result = {"status": "error", "error": str(exc)}
-                            result["failure"] = failure("batch_budget_exhausted" if isinstance(exc, BudgetExhausted) else "framework_error_unclassified", "budget" if isinstance(exc, BudgetExhausted) else "unknown", "stop")
-                        finally:
-                            result["elapsed_seconds"] = round(time.monotonic() - tick, 3)
-                            write_json(finished, result)
-                        write_reports(root)
-                        outcome = result.get("failure")
-                        if outcome:
-                            if outcome["batch_action"] == "stop":
-                                raise EvalError("execution stopped (" + outcome["scope"] + "): " + outcome["code"])
-                            if not can_review_artifact(root, trial_id, stage, outcome):
-                                break  # The next independent case, not another attempt.
-                        if result["status"] != "completed":
-                            break
+                execute_waves(root, config, descriptor, runtime, identity, segment, stop)
         except KeyboardInterrupt:
             reason = "operator interrupted; completed stages retained, interrupted attempt will not be replayed"
         except (EvalError, OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:

@@ -7,6 +7,6 @@
   "maven_repository": "/absolute/repo/evals/ci-self-healing/runs/native-cache/repository",
   "model_profile": "/absolute/home/.chrys/models/selected-glm52.yaml",
   "endpoint_host": "approved-gateway.example.invalid",
-  "timeout_seconds": 600,
+  "timeout_seconds": 900,
   "max_tool_calls": 80
 }

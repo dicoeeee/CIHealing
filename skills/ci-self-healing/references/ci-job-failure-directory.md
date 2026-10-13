@@ -2,6 +2,8 @@
 
 读取条件与参数含义以主入口的[调用参数与报告输出](../SKILL.md#调用参数与报告输出)为准。本文件描述某一类企业 CI 的输入布局与交付约定，不代表所有企业 CI，也不替代通用的诊断、修复准入、验证和停止规则。
 
+确认本场景的路径与执行约束后，进入主流程第 2 步：先完整读取[通用诊断流程](diagnosis-and-repair.md)，再结合现场证据选择语言或依赖等专门指南。
+
 本场景由流水线在构建失败后启动 Agent，提供失败现场，在 Job 工作空间内修复并验证。启动约定为 `mode: local_verify`，`collaboration.can_ask_user: false`、`collaboration.can_handoff_to_parent: false`；执行者角色仍按可信调用确定。运行时上下文按原 Job 结论是否固化选择，见[运行时上下文](execution-modes.md#运行时上下文)。执行与 Patch 交付沿用[CI Job 工作空间交付](execution-modes.md#ci-job-工作空间交付)。
 
 ## 调用与路径

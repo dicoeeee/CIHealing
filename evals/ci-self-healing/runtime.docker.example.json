@@ -4,6 +4,6 @@
   "chrys_config_dir": "/absolute/path/to/isolated-chrys-profiles",
   "agent": "EvalCode",
   "expected_model_id": "glm-5.2",
-  "timeout_seconds": 600,
+  "timeout_seconds": 900,
   "max_tool_calls": 80
 }

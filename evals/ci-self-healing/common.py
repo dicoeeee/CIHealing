@@ -1,6 +1,7 @@
 """Small, dependency-free primitives for host-owned evaluation artifacts."""
 
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import subprocess
 import time
 import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 
 
@@ -22,28 +24,45 @@ class BudgetExhausted(EvalError):
     pass
 
 
-_deadline = None
+class CoordinatorCancelled(KeyboardInterrupt):
+    """Use the existing interruption cleanup path, retaining cancellation origin."""
+
+
+_deadline = ContextVar("eval_deadline", default=None)
+_cancellation = ContextVar("eval_cancellation", default=None)
 # A domain tag shared explicitly with native child gateways. Never compare
 # monotonic timestamps from an unrelated host/process invocation by accident.
 HOST_CLOCK_ID = uuid.uuid4().hex
 
 
 @contextmanager
-def wall_budget(seconds=None):
-    """Cooperative aggregate deadline; subprocess timeouts share this bound."""
-    global _deadline
-    previous = _deadline
-    _deadline = None if seconds is None else time.monotonic() + seconds
+def wall_budget(seconds=None, *, cancellation=None):
+    """Task-local deadline; explicit cleanup scopes cannot extend peer budgets.
+
+    A nested cleanup scope has its own bounded deadline and ignores cancellation.
+    Coordinators copy the absolute deadline and cancellation token into workers.
+    """
+    deadline = _deadline.set(None if seconds is None else time.monotonic() + seconds)
+    cancel = _cancellation.set(cancellation)
     try:
         yield
     finally:
-        _deadline = previous
+        _cancellation.reset(cancel)
+        _deadline.reset(deadline)
+
+
+def check_cancelled():
+    token = _cancellation.get()
+    if token is not None and token.is_set():
+        raise CoordinatorCancelled()
 
 
 def remaining_timeout(seconds):
-    if _deadline is None:
+    check_cancelled()
+    deadline = _deadline.get()
+    if deadline is None:
         return seconds
-    remaining = _deadline - time.monotonic()
+    remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise BudgetExhausted("suite wall-clock budget exhausted")
     return min(seconds, remaining)
@@ -85,6 +104,30 @@ def write_new(path, value):
 
 def write_json(path, value):
     write_new(path, json_bytes(value))
+
+
+def bind_json(path, value, error):
+    """Serialize first publication and equality checks of shared immutable bindings."""
+    path = Path(path).absolute()
+    if any(p.is_symlink() for p in (path, *path.parents)):
+        raise EvalError("symlink binding refused")
+    lock = path.with_name("." + path.name + ".lock")
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        while True:
+            remaining_timeout(1)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                time.sleep(0.01)
+        if path.exists() or path.is_symlink():
+            if read_json(path) != value:
+                raise EvalError(error)
+        else:
+            write_json(path, value)
+    finally:
+        os.close(fd)
 
 
 def read_regular(path, limit=16 * 1024 * 1024):
@@ -238,6 +281,7 @@ def run_logged(argv, directory, timeout, env=None, stdin=None, limit=16 * 1024 *
     started_at = datetime.now(timezone.utc).isoformat()
     status = "completed"
     interrupted = False
+    interrupt_reason = "operator"
     interrupt_sent = False
     pending_error = None
     signals = []
@@ -267,6 +311,7 @@ def run_logged(argv, directory, timeout, env=None, stdin=None, limit=16 * 1024 *
                 selector.register(process.stdout, selectors.EVENT_READ, out)
                 selector.register(process.stderr, selectors.EVENT_READ, err)
                 while selector.get_map() or process.poll() is None:
+                    check_cancelled()
                     elapsed = time.monotonic() - started
                     if elapsed >= timeout:
                         status = "timeout"
@@ -287,21 +332,23 @@ def run_logged(argv, directory, timeout, env=None, stdin=None, limit=16 * 1024 *
                             if len(retained) != len(data):
                                 status = "output_limit"
                                 break
-                    except KeyboardInterrupt:
+                    except KeyboardInterrupt as exc:
                         # Receipt is written before propagating operator cancellation.
                         interrupted = True
+                        interrupt_reason = "coordinator" if isinstance(exc, CoordinatorCancelled) else "operator"
                         break
                     if status == "output_limit":
                         break
-            except KeyboardInterrupt:
+            except KeyboardInterrupt as exc:
                 interrupted = True
+                interrupt_reason = "coordinator" if isinstance(exc, CoordinatorCancelled) else "operator"
             except Exception as exc:
                 status = "execution_error"
                 pending_error = exc
             finally:
-                reason = "operator" if interrupted else status
+                reason = interrupt_reason if interrupted else status
                 kill_sent = False
-                if reason in {"operator", "timeout", "output_limit", "execution_error"}:
+                if reason in {"operator", "coordinator", "timeout", "output_limit", "execution_error"}:
                     kill_sent = cancel(process, signal.SIGKILL, reason)
                 cleanup = stop_owned_group(process, kill_already_sent=kill_sent)
                 if selector is not None:
@@ -312,7 +359,7 @@ def run_logged(argv, directory, timeout, env=None, stdin=None, limit=16 * 1024 *
               "duration_seconds": round(time.monotonic() - started, 3), "started_at": started_at,
               "ended_at": datetime.now(timezone.utc).isoformat(), "cleanup": cleanup,
               "identity": dict(identity or {}), "clock_id": HOST_CLOCK_ID,
-              "termination": {"reason": "operator" if interrupted else status,
+              "termination": {"reason": interrupt_reason if interrupted else status,
                               "pid": process.pid, "pgid": process.pid, "signals": signals},
               "shutdown": {"grace_seconds": grace, "interrupt_sent": interrupt_sent,
                            "within_execution_budget": True}}

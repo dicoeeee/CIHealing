@@ -2,6 +2,7 @@
   "output_root": "runs/batches",
   "runtime": "/absolute/path/to/isolated-repair-runtime.json",
   "backend": "native",
+  "max_parallel_trials": 3,
   "reviewer": {
     "chrys": "/absolute/path/to/icode",
     "python": "/absolute/path/to/icode-tui/bin/python",

@@ -15,8 +15,11 @@ from runtime import load_runtime
 from suite import REPO, ROOT, bundle_hash, skill_from_dir
 
 
-def freeze(previous, output):
+def freeze(previous, output, *, repair_timeout_seconds=900, max_parallel_trials=3):
     previous, output = Path(previous).absolute(), Path(output).absolute()
+    if (type(repair_timeout_seconds) is not int or not 1 <= repair_timeout_seconds <= 1800
+            or type(max_parallel_trials) is not int or not 1 <= max_parallel_trials <= 3):
+        raise EvalError("invalid freeze repair timeout or parallel trial limit")
     if (output.exists() or output.is_symlink() or output != output.resolve()
             or ROOT / "runs" not in output.parents or previous == output or previous in output.parents):
         raise EvalError("freeze output must be a new canonical directory under runs, outside prior freezes")
@@ -46,7 +49,9 @@ def freeze(previous, output):
     if snapshot(cache_target, skip_git=False) != cache:
         raise EvalError("cache copy differs")
     runtime["maven_repository"] = str(cache_target)
-    config.update(runtime=str(frozen / "config/runtime.json"), output_root=str(output / "batches"))
+    runtime["timeout_seconds"] = repair_timeout_seconds
+    config.update(runtime=str(frozen / "config/runtime.json"), output_root=str(output / "batches"),
+                  max_parallel_trials=max_parallel_trials)
     write_json(frozen / "config/runtime.json", runtime)
     write_json(frozen / "config/batch.json", config)
     files.update({n: read_regular(frozen / n) for n in ("config/runtime.json", "config/batch.json")})
@@ -68,5 +73,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--previous", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--repair-timeout-seconds", type=int, default=900, help="new freeze repair wall limit (default: 900)")
+    p.add_argument("--max-parallel-trials", type=int, choices=(1, 2, 3), default=3, help="new freeze worker limit (default: 3)")
     a = p.parse_args()
-    print(json.dumps(freeze(a.previous, a.output), ensure_ascii=False, indent=2))
+    print(json.dumps(freeze(a.previous, a.output, repair_timeout_seconds=a.repair_timeout_seconds,
+                           max_parallel_trials=a.max_parallel_trials), ensure_ascii=False, indent=2))

@@ -30,6 +30,16 @@ class NativeRepairTests(unittest.TestCase):
                        "endpoint_host": "gateway.invalid"}
         (self.base / "cache").mkdir()
 
+    def test_default_repair_timeout_is_900_and_explicit_limits_are_preserved(self):
+        root = self.base / 'evals'
+        cache = root / 'runs/cache'
+        cache.mkdir(parents=True)
+        config = {**self.config, 'maven_repository': str(cache)}
+        with mock.patch('native_repair.ROOT', root), mock.patch('pathlib.Path.is_file', return_value=True), \
+             mock.patch('os.access', return_value=True):
+            self.assertEqual(load_config(config)['timeout_seconds'], 900)
+            self.assertEqual(load_config({**config, 'timeout_seconds': 600})['timeout_seconds'], 600)
+
     def test_native_fixture_contains_real_paths_not_container_paths(self):
         visible = self.base / "trial/visible"
         materialize(visible, "case-003", "opaque", backend="native")

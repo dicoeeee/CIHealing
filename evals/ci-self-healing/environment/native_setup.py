@@ -48,7 +48,7 @@ def main():
               "java_home": str(args.java_home or Path(command(["/usr/libexec/java_home"]).decode().strip())),
               "maven_repository": str(args.repository.absolute() if args.repository else output / "repository"), "endpoint_host": args.endpoint_host,
               "model_profile": str((args.model_profile or output / "MODEL_PROFILE_NOT_CONFIGURED").absolute()),
-              "timeout_seconds": 600, "max_tool_calls": 80}
+              "timeout_seconds": 900, "max_tool_calls": 80}
     if args.git:
         config["git"] = str(args.git.absolute())
     config = load_config(config)

@@ -10,7 +10,7 @@ from pathlib import Path
 import platform
 import sys
 
-from common import EvalError, command, digest, json_bytes, read_json, read_regular, run_logged, write_json, write_new
+from common import bind_json, EvalError, command, digest, json_bytes, read_json, read_regular, run_logged, write_json, write_new
 from runtime_diagnostics import write_diagnostics
 from resource_cleanup import OwnedResources, validate_cleanup
 from review import validate_verdict
@@ -321,11 +321,8 @@ def native_review(suite, trial_id, directory, config, expected_identity, *, publ
     binding = {"transport": "chrys-run-native-v1", **expected_identity, "timeout_seconds": config["timeout_seconds"],
                "max_packet_bytes": config["max_packet_bytes"]}
     binding_path = suite / "reviewer-binding.json" if publish else directory / "reviewer-binding.json"
-    if publish and binding_path.exists():
-        if read_json(binding_path) != binding:
-            raise EvalError("reviewer binding drift")
-    elif publish:
-        write_json(binding_path, binding)
+    if publish:
+        bind_json(binding_path, binding, "reviewer binding drift")
     prepare_native(suite, trial_id, directory, expected_identity["profile_id"], config["endpoint_host"],
                    expected_identity["version"], config["max_packet_bytes"], compact=True, frozen_packet=frozen_packet,
                    cli=config["chrys"])

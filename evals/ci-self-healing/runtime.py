@@ -9,7 +9,7 @@ import tempfile
 import uuid
 
 from cases import oracle
-from common import EvalError, command, digest, json_bytes, read_json, read_regular, remaining_timeout, run_logged, snapshot, wall_budget, write_json, write_new
+from common import bind_json, EvalError, command, digest, json_bytes, read_json, read_regular, remaining_timeout, run_logged, snapshot, wall_budget, write_json, write_new
 from repair_support import ADAPTER_FILES, RUNTIME_CONTRACT, execution_contract, SESSION_MOUNT, SKILL_MOUNT, budget_notice, session_receipt
 from suite import ROOT, load_suite, select_trials
 
@@ -40,7 +40,7 @@ def load_runtime(path):
         raise EvalError("configuration contains session/history state")
     config["chrys_config_dir"] = str(directory)
     config["profile_snapshot_sha256"] = digest(json_bytes(rows))
-    config.setdefault("timeout_seconds", 600)
+    config.setdefault("timeout_seconds", 900)
     config.setdefault("max_tool_calls", 80)
     if not 1 <= config["timeout_seconds"] <= 1800 or not 1 <= config["max_tool_calls"] <= 200:
         raise EvalError("runtime budgets outside supported bounds")
@@ -153,11 +153,7 @@ def run_trials(root, runtime_path, trial_id=None):
                "expected_model_id": config["expected_model_id"], "timeout_seconds": config["timeout_seconds"],
                "max_tool_calls": config["max_tool_calls"]}
     binding_path = root / "runtime-binding.json"
-    if binding_path.exists():
-        if read_json(binding_path) != binding:
-            raise EvalError("suite runtime configuration changed; prepare a separate suite")
-    else:
-        write_json(binding_path, binding)
+    bind_json(binding_path, binding, "suite runtime configuration changed; prepare a separate suite")
     summaries = []
     for row in select_trials(manifest, trial_id):
         if load_runtime(runtime_path) != config:

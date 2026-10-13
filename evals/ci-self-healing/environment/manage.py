@@ -70,7 +70,7 @@ def configure(args):
     (profiles / "agents/EvalCode.yaml").write_text(yaml.safe_dump(agent, sort_keys=False))
     image = json.loads(docker("image", "inspect", args.image).stdout)[0]["Id"]
     runtime = {"image": image, "network": INTERNAL, "chrys_config_dir": str(profiles),
-               "agent": "EvalCode", "expected_model_id": model["model_id"], "timeout_seconds": 600, "max_tool_calls": 80}
+               "agent": "EvalCode", "expected_model_id": model["model_id"], "timeout_seconds": 900, "max_tool_calls": 80}
     (target / "runtime.json").write_text(json.dumps(runtime, indent=2) + "\n")
     receipt = {"chrys_version": chrys.__version__, "code_instructions_sha256": hashlib.sha256(agent["instructions"].encode()).hexdigest(),
                "docker_context": CONTEXT, "upstream_secret_written": False}
