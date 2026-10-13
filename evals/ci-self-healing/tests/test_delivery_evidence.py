@@ -165,6 +165,33 @@ class DeliveryEvidenceTests(unittest.TestCase):
         self.report.write_text(STOP_REPORT + "changed\n")
         self.assertNotEqual(self.assess()["status"], "reviewable_stop_artifact")
 
+    def test_check_and_readback_interleaving_preserves_delivery_audit(self):
+        original = copy.deepcopy(self.events)
+        # Both starts precede either result: native tools from one readonly batch.
+        first = next(i for i, e in enumerate(original) if e["kind"] == "InvocationToolCallStart"
+                     and e["payload"]["tool_name"] == "run_skill_script")
+        for order in ((0, 2, 1, 3), (0, 2, 3, 1)):
+            with self.subTest(order=order):
+                self.events = copy.deepcopy(original)
+                block = self.events[first:first + 4]
+                self.events[first:first + 4] = [block[i] for i in order]
+                for seq, event in enumerate(self.events, 1):
+                    event.update(seq=seq, observed_ns=seq * 10)
+                result = self.assess()
+                self.assertEqual(result["gaps"], [])
+                self.assertEqual(result["status"], "reviewable_stop_artifact")
+                self.assertEqual(result["checkpoint_seq"], max(result["check_seq"], result["readback_seq"]))
+
+    def test_check_and_readback_batch_does_not_waive_missing_result(self):
+        start = next(e for e in self.events if e["kind"] == "InvocationToolCallStart"
+                     and e["payload"]["tool_name"] == "read_file")
+        for event in self.events:
+            if event["kind"] == "InvocationToolCallResult" and event["payload"]["call_id"] == start["payload"]["call_id"]:
+                event["kind"] = "omitted.result"
+        result = self.assess()
+        self.assertNotEqual(result["status"], "reviewable_stop_artifact")
+        self.assertIn("unfinished_tool", result["gaps"])
+
     def test_cleanup_legacy_and_early_or_unbound_cancel_fail_closed(self):
         original = copy.deepcopy(self.run)
         for mutate in (lambda: self.run.pop("delivery_contract"),

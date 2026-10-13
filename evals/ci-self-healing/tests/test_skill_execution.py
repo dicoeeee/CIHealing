@@ -108,6 +108,98 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual(self.audit()["dimensions"]["cleanup_evidence"]["status"], "confirmed")
         self.assertEqual(self.audit()["workspace_checks"][-1]["binding"], "confirmed")
 
+    def capture_before_and_after_candidate(self):
+        self.workspace("capture", "superseded")
+        old_seq = self.events[-1]["seq"]
+        old = self.out / "superseded.json"
+        original = old.read_bytes()
+        self.load_resource("references/workspace-recovery.md")
+        self.call("edit_file", {"path": "Example.java"}, "done",
+                  lambda: (self.repo / "src/main/java/Example.java").write_text("class Changed {}"))
+        self.workspace("capture")
+        return old, original, old_seq
+
+    def test_candidate_then_single_capture_and_cleanup_batch_matches_first_check(self):
+        # A Job may own both files and empty directories in an ignored output tree.
+        old_empty = self.repo / "target/job-owned-empty"
+        old_empty.mkdir()
+        self.call("edit_file", {"path": "Example.java"}, "done",
+                  lambda: (self.repo / "src/main/java/Example.java").write_text("class Changed {}"))
+        self.workspace("capture")
+        manifest = (self.out / "one.json").read_bytes()
+        self.build()
+
+        def cleanup_batch():
+            # Explicit owned paths; no recursive deletion of the shared target root.
+            (self.repo / "target/generated-sources/annotations/Example.class").unlink()
+            (self.repo / "target/generated-sources/annotations").rmdir()
+            (self.repo / "target/generated-sources").rmdir()
+
+        self.call("bash", {"command": "rm target/generated-sources/annotations/Example.class && "
+                  "rmdir target/generated-sources/annotations target/generated-sources"},
+                  "[exit_code: 0]", cleanup_batch)
+        self.assertEqual(self.workspace("check")["result"], "match")
+        result = self.audit()
+        self.assertEqual(result["failures"], [])
+        self.assertEqual(result["gaps"], [])
+        self.assertEqual(result["violations"], [])
+        self.assertEqual([r["result"] for r in result["workspace_checks"]], ["captured", "match"])
+        self.assertEqual((self.out / "one.json").read_bytes(), manifest)
+        self.assertTrue(old_empty.is_dir())
+        self.assertEqual((self.repo / "target/preexisting.txt").read_text(), "job-owned\n")
+        self.assertEqual((self.repo / "src/main/java/Example.java").read_text(), "class Changed {}")
+
+    def test_cleanup_batch_must_not_remove_preexisting_empty_directory(self):
+        old_empty = self.repo / "target/job-owned-empty"
+        old_empty.mkdir()
+        self.workspace("capture"); self.build(); self.clean()
+        self.call("bash", {"command": "rmdir target/job-owned-empty"}, "[exit_code: 0]", old_empty.rmdir)
+        self.assertEqual(self.workspace("check")["result"], "mismatch")
+        self.assertIn("final_native_cleanup_match_unconfirmed", self.checks())
+
+    def test_superseded_capture_is_retained_while_current_capture_verifies_candidate(self):
+        old, original, _ = self.capture_before_and_after_candidate()
+        self.build(); self.clean(); self.workspace("check")
+        result = self.audit()
+        self.assertEqual(old.read_bytes(), original)
+        self.assertEqual(result["failures"], [])
+        self.assertEqual(result["gaps"], [])
+        self.assertTrue(all(r["binding"] == "confirmed" for r in result["workspace_checks"]))
+        self.assertEqual(result["dimensions"]["cleanup_evidence"]["status"], "confirmed")
+        self.assertEqual((self.repo / "target/preexisting.txt").read_text(), "job-owned\n")
+
+    def test_deleting_superseded_capture_leaves_gap_despite_current_match(self):
+        old, _, seq = self.capture_before_and_after_candidate()
+        self.call("bash", {"command": "rm -f " + str(old)}, "[exit_code: 0]", old.unlink)
+        self.build(); self.clean(); self.workspace("check")
+        result = self.audit()
+        self.assertEqual(result["workspace_checks"][-1]["result"], "match")
+        self.assertEqual(result["workspace_checks"][-1]["binding"], "confirmed")
+        self.assertEqual(result["failures"], [])
+        self.assertEqual(result["gaps"], [f"workspace_receipt_unconfirmed:E{seq:04d}"])
+        self.assertEqual(result["dimensions"]["cleanup_evidence"]["status"], "unconfirmed")
+
+    def test_replacing_superseded_capture_with_current_manifest_does_not_restore_binding(self):
+        old, _, seq = self.capture_before_and_after_candidate()
+        self.call("write_file", {"path": str(old)}, "done",
+                  lambda: old.write_bytes((self.out / "one.json").read_bytes()))
+        self.build(); self.clean(); self.workspace("check")
+        result = self.audit()
+        self.assertEqual(result["workspace_checks"][-1]["result"], "match")
+        self.assertEqual(result["gaps"], [f"workspace_receipt_unconfirmed:E{seq:04d}"])
+        self.assertEqual(result["dimensions"]["cleanup_evidence"]["status"], "unconfirmed")
+
+    def test_deleted_historical_capture_blocks_recovery_even_after_rebuild_and_match(self):
+        self.late_candidate()
+        old = self.out / "one.json"
+        self.call("bash", {"command": "rm -f " + str(old)}, "[exit_code: 0]", old.unlink)
+        self.complete_recovery()
+        result = self.audit()
+        self.assertEqual(result["workspace_checks"][-1]["result"], "match")
+        self.assertTrue(result["gaps"])
+        self.assertEqual(result["recoveries"], [])
+        self.assertIn("build_without_confirmed_native_capture", [f["check"] for f in result["failures"]])
+
     def test_report_mentioning_skill_path_is_not_a_file_access(self):
         self.call("write_file", {"path": str(self.out / "analysis-fix.md"),
                   "content": str(self.skill / "scripts/workspace_check.py")}, "done")

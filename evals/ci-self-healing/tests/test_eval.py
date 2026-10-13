@@ -55,6 +55,7 @@ STOP_REPORT = """# CI 自愈诊断与修复报告
 | invocation_id | synthetic |
 | 请求类型 | 修复 |
 | 执行模式 | local_verify |
+| 绑定 Profile | 未绑定：Skill 未固定，本次调用未指定 |
 | work_dir | /trial/scene |
 | output_dir | /trial/output |
 

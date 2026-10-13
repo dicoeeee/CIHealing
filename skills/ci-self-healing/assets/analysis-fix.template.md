@@ -7,6 +7,7 @@
 | invocation_id | {{REPORT:调用身份或不适用及原因}} |
 | 请求类型 | {{REPORT:仅诊断或修复}} |
 | 执行模式 | {{REPORT:local_verify或remote_verify或不适用及原因}} |
+| 绑定 Profile | {{REPORT:实际分类Profile标识版本及绑定来源或未绑定未应用标准及原因}} |
 | work_dir | {{REPORT:实际现场绝对路径或不适用及原因}} |
 | output_dir | {{REPORT:实际输出绝对路径或不适用及原因或无效输入说明}} |
 

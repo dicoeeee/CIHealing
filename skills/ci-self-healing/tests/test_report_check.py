@@ -1,6 +1,7 @@
 """Report delivery scenarios and read-only CLI behavior; synthetic evidence only."""
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import json
 from pathlib import Path
@@ -26,6 +27,7 @@ BASE = """# CI 自愈诊断与修复报告
 | invocation_id | example-1 |
 | 请求类型 | 修复 |
 | 执行模式 | local_verify |
+| 绑定 Profile | 未绑定：Skill 未固定，本次调用未指定 |
 | work_dir | /scene |
 | output_dir | /output |
 
@@ -115,6 +117,8 @@ REMOTE = """**远端运行**
 
 
 def classified(text=BASE):
+    text = text.replace("| 绑定 Profile | 未绑定：Skill 未固定，本次调用未指定 |",
+                        "| 绑定 Profile | example-profile；版本 v1；来源：可信调用参数 |")
     return text.replace("- 分类要求：无：未配置 Profile 且本次无分类要求。\n", CLASSIFICATION)
 
 
@@ -218,10 +222,25 @@ class ReportCheckTests(unittest.TestCase):
         self.assertEqual(self.errors(text, classification="required"), [])
 
     def test_metadata_can_be_extended_but_required_identity_stays(self):
-        text = BASE.replace("| output_dir | /output |", "| output_dir | /output |\n| 生成时间 | 2026-09-28T08:00:00Z |\n| 执行者角色 | main |")
+        text = BASE.replace("| output_dir | /output |", "| output_dir | /output |\n| 生成时间 | 2026-09-28T08:00:00Z |\n| 运行场景 | CI Job |")
         self.assertEqual(self.errors(text), [])
         self.assertIn("metadata_fields", self.codes(text.replace("| invocation_id | example-1 |\n", "")))
         self.assertIn("metadata_duplicate", self.codes(text.replace("| invocation_id | example-1 |", "| invocation_id | example-1 |\n| invocation_id | example-2 |")))
+
+    def test_bound_profile_is_required_in_metadata_even_when_body_records_it(self):
+        text = classified()
+        row = "| 绑定 Profile | example-profile；版本 v1；来源：可信调用参数 |\n"
+        for replacement in ("", "| 执行者角色 | main |\n", "| Provider | example-provider |\n"):
+            with self.subTest(replacement=replacement):
+                self.assertIn("metadata_fields", self.codes(text.replace(row, replacement), classification="required"))
+
+    def test_bound_profile_can_disclose_unapplied_or_per_object_bindings(self):
+        for value in ("example-profile；版本未知；来源：固定绑定；未应用标准：入口不可读",
+                      "未应用标准：固定绑定 example-a 与可信调用 example-b 冲突",
+                      "example/build：example-a v1（固定绑定）；other/build：example-b v2（可信调用）"):
+            with self.subTest(value=value):
+                text = classified().replace("example-profile；版本 v1；来源：可信调用参数", value)
+                self.assertEqual(self.errors(text, classification="required"), [])
 
     def test_body_accepts_narrative_lists_and_custom_subsections(self):
         text = re.sub(r"^- [^：\n]+：", "", BASE, flags=re.MULTILINE)
@@ -380,6 +399,44 @@ class ReportCheckTests(unittest.TestCase):
                     path.write_bytes(content)
                 code, result = self.cli("--report", str(path), "--classification", "none", "--checks", "none")
                 self.assertEqual((code, result["format_status"]), (2, "incomplete"))
+
+    def test_final_report_check_and_readback_can_share_one_readonly_batch(self):
+        # Conditions come from the task; each completed report passes on first check.
+        stop = no_changes(no_checks(BASE)).replace("local_verified", "inconclusive")
+        required_stop = classified(stop).replace("C 编译 / C1 符号解析", "未应用标准：入口不可读")
+        remote = BASE.replace("local_verify", "remote_verify").replace("local_verified", "outer_ci_passed")
+        remote = remote.replace("## 1. 处理结论", REMOTE + "## 1. 处理结论")
+        planned = BASE.replace("| passed |", "| 未执行：缺少编译器 |")
+        for text, classification, checks in ((stop, "none", "none"), (required_stop, "required", "none"),
+                                              (planned, "none", "present"), (remote, "none", "present")):
+            with self.subTest(classification=classification, checks=checks), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "analysis-fix.md"
+                raw = text.encode("utf-8")
+                path.write_bytes(raw)
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    check = pool.submit(self.cli, "--report", str(path), "--classification", classification, "--checks", checks)
+                    readback = pool.submit(path.read_bytes)
+                    code, receipt = check.result()
+                    returned = readback.result()
+                self.assertEqual((code, receipt["format_status"]), (0, "valid"))
+                self.assertEqual(receipt["sha256"], hashlib.sha256(returned).hexdigest())
+                self.assertEqual(returned, raw)
+                self.assertEqual(path.read_bytes(), raw)
+                self.assertEqual(list(Path(directory).iterdir()), [path])
+
+    def test_report_edit_invalidates_previous_check_and_readback_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "analysis-fix.md"
+            path.write_text(BASE, encoding="utf-8")
+            _, old = self.cli("--report", str(path), "--classification", "none", "--checks", "present")
+            old_readback = path.read_bytes()
+            # A well-formed new body still needs its own receipt and readback.
+            path.write_text(BASE + "\n补充交接证据：handoff-2。\n", encoding="utf-8")
+            self.assertNotEqual(hashlib.sha256(path.read_bytes()).hexdigest(), old["sha256"])
+            self.assertNotEqual(path.read_bytes(), old_readback)
+            code, current = self.cli("--report", str(path), "--classification", "none", "--checks", "present")
+            self.assertEqual((code, current["format_status"]), (0, "valid"))
+            self.assertEqual(current["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
 
 
 if __name__ == "__main__":
