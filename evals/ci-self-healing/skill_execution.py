@@ -10,11 +10,32 @@ import re
 import shlex
 
 from common import EvalError, digest, json_bytes, read_json, read_regular
-from repair_support import (EXECUTION_CONTRACT, EXECUTION_CONTRACTS, RECOVERY_EXECUTION_CONTRACTS,
-                            SKILL_NAME, execution_contract, source_state)
+from repair_support import (EXECUTION_CONTRACT, EXECUTION_CONTRACTS, RECOVERY_EXECUTION_CONTRACTS, SPLIT_EXECUTION_CONTRACTS,
+                            POLICY_EXECUTION_CONTRACTS, SKILL_NAME, execution_contract, source_state)
 
 
 RECOVERABLE_CAPTURE_CHECKS = {"build_without_confirmed_native_capture", "capture_not_current_at_build"}
+
+
+def uses_trial_workspace(payload, visible):
+    """Bounded input-read gate for synthetic tools, not a shell interpreter.
+
+    File/search tools may use relative/default roots. Shell calls are recognized
+    by a literal visible-root reference, cwd or the existing direct build parser.
+    Unknown tools and opaque shell path construction still need semantic review.
+    """
+    name, args = payload.get("tool_name"), payload.get("args", {})
+    if name in {"read_file", "write_file", "edit_file", "glob", "grep", "list_directory"}:
+        return True
+    if name == "bash":
+        return is_build(payload) or any(str(visible) in str(args.get(k, "")) for k in ("command", "cwd"))
+    if name == "run_skill_script" and args.get("skill_name") == SKILL_NAME:
+        try:
+            tokens = script_tokens(args)
+        except ValueError:
+            return True  # Malformed receipt remains invalid under the existing audit.
+        return not any(t in {"--help", "-h"} for t in tokens)
+    return False
 
 
 def capture_recoveries(failures, builds, captures, latest_check, final_state, gaps):
@@ -143,11 +164,13 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
     skill = trial / ("runtime/skills/ci-self-healing" if backend == "native" else "runtime-skill")
     exposed_skill = str(skill) if backend == "native" else "/skills/ci-self-healing"
     exposed_root = str(trial / "visible/scene/sourcecode") if backend == "native" else "/trial/scene/sourcecode"
-    if contract == EXECUTION_CONTRACT and execution_contract(skill) != contract:
+    if contract in SPLIT_EXECUTION_CONTRACTS and execution_contract(skill) != contract:
         raise EvalError("Skill package does not declare the split resource layout")
     candidate_resources = ("references/diagnosis-and-repair.md", "references/repair-and-verification.md")
-    if contract == EXECUTION_CONTRACT:
+    if contract in SPLIT_EXECUTION_CONTRACTS:
         candidate_resources += ("references/repair-basis.md",)
+    if contract in POLICY_EXECUTION_CONTRACTS:
+        candidate_resources += ("references/enterprise-policy.md",)
     result = {"contract": contract, "failures": [], "gaps": [], "resource_reads": [],
               "builds": [], "workspace_checks": [], "non_native_workspace_observations": [], "script_invocations": [],
               "coverage": "native tool receipts and boundary states; unconfirmed native evidence does not prove no shell execution; opaque commands/intent require semantic review"}
@@ -191,12 +214,15 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
         if kind == "InvocationToolCallStart":
             calls[p.get("call_id")] = event
             name, args = p.get("tool_name"), p.get("args", {})
+            if contract == EXECUTION_CONTRACT and uses_trial_workspace(
+                    p, trial / "visible" if backend == "native" else "/trial"):
+                require(("references/invocation-inputs.md",), seq)
             if name in {"read_skill_resource", "run_skill_script"} and args.get("skill_name") == SKILL_NAME and not loaded:
                 fail("skill_resource_before_native_load", seq)
             if direct_skill_access(name, args, exposed_skill):
                 fail("skill_native_tool_bypassed", seq)
             script = args.get("script_name") if name == "run_skill_script" else None
-            if contract == EXECUTION_CONTRACT and script == "scripts/workspace_check.py":
+            if contract in SPLIT_EXECUTION_CONTRACTS and script == "scripts/workspace_check.py":
                 try:
                     tokens = script_tokens(args)
                 except ValueError:
@@ -214,6 +240,8 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
             if is_build(p):
                 result["builds"].append(seq)
                 require(("references/workspace-cleanup.md",), seq)
+                if contract in POLICY_EXECUTION_CONTRACTS:
+                    require(("references/enterprise-policy.md", "references/candidate-verification.md"), seq)
                 # A group can reuse its capture despite generated outputs, but
                 # must not reuse it after candidate changes (checked below).
                 if active_capture is None:
@@ -340,6 +368,18 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
         "cleanup_evidence": {"status": "not_required" if not cleanup_required else
             ("confirmed" if not cleanup_failures and not result["gaps"] and not trace_gaps else "unconfirmed"),
             "basis": "bound native capture, build ordering, final match and final state; v2/v3 recovery additionally requires full-state reconstruction proof"}}
+    if contract in POLICY_EXECUTION_CONTRACTS:
+        result["dimensions"]["cleanup_evidence"]["basis"] = (
+            "bound native capture, build ordering, final match and final state; v4 recovery additionally requires full-state reconstruction proof")
+        result["coverage"] += (
+            "; v4 policy full-read gate covers observed Java source mutations and detected builds; "
+            "candidate-verification full-read gate covers detected builds; candidate intent, policy applicability, "
+            "failure/collaboration branch selection and opaque writes require semantic review; posthoc audit, not preventive enforcement")
+    if contract == EXECUTION_CONTRACT:
+        result["coverage"] += (
+            "; v5 invocation-inputs full-read gate covers file/search tools, literal trial-root shell access, "
+            "detected builds and non-help Skill scripts; input interpretation, core-contract applicability, "
+            "stop sufficiency and unnecessary resource reads require semantic review; no reasoning-text inspection")
     if contract in RECOVERY_EXECUTION_CONTRACTS:
         result["dimensions"]["process_compliance"] = {
             "status": "violations_observed" if result["violations"] else "no_observed_violation",

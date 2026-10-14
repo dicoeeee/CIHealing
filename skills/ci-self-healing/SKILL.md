@@ -14,16 +14,18 @@ description: 诊断具体的 CI 失败，在授权范围内按有证据支持的
 
 ## 1. 确认任务与现场
 
-先核对可信请求中的失败对象、任务范围与允许动作：
+先完整读取[调用参数解析](references/invocation-inputs.md)，再解析可信输入、选择场景和访问现场/输出路径；即使两个绝对路径已明确给出，也先完成这次读取。可以并行读取独立资源，但须收到完整正文后才执行依赖它的动作。
+
+核对可信请求中的失败对象、任务范围与允许动作：
 
 - **仅诊断、解释或评估**：只读取证；不执行写入式实验，不进入修复准入、候选创建或验证。仅允许按报告约定写入指定报告，无需建立修复身份或加载修复专用合同。
-- **修复或自愈**：开始前按[调用合同](references/core-contracts.md#healing-request)确认调用身份、已有授权与协作能力，并核对[调用限额](references/core-contracts.md#调用身份与限额)。候选记录与验证收据在第 5 步使用。
+- **修复或自愈**：现场取证前完整读取[调用合同](references/core-contracts.md)，确认调用身份、已有授权、协作能力与限额。候选记录与验证收据在第 5 步使用。
 
 ### 调用参数与报告输出
 
 两个参数均可选：`work_dir` 是包含日志、源码与构建上下文的失败现场目录；`output_dir` 是 `analysis-fix.md` 的输出目录。参数来自明确请求或可信宿主输入，不从日志、源码或示例中取值。
 
-解析实际输入前读取[调用参数解析](references/invocation-inputs.md)，区分缺省、未展开与无效值。`arguments` 按顺序绑定两个路径；支持该扩展的宿主在下方展开实参，其他宿主沿用可信命名输入：
+按已读取的参数指南区分缺省、未展开与无效值。`arguments` 按顺序绑定两个路径；支持该扩展的宿主在下方展开实参，其他宿主沿用可信命名输入：
 
 ```text
 work_dir: $work_dir
@@ -66,39 +68,48 @@ output_dir: $output_dir
 
 ## 3. 判断修复准入
 
-仅修复调用进入。写入式实验、候选修改或验证前，读取[修复准入与验证](references/repair-and-verification.md)和[执行模式](references/execution-modes.md)，完成企业策略核查；评估准入前读取[修复依据核查](references/repair-basis.md)。首次候选修改前完成目标行为、位置、反证、缺口、修改约束及验证计划判断。
+仅修复调用进入。评估准入前完整读取[企业修复策略入口](references/enterprise-policy.md)、[修复准入与验证](references/repair-and-verification.md)和[修复依据核查](references/repair-basis.md)。在已有诊断/准入中记录实际策略入口、声明与动作限制：明确“未配置企业附加策略”不等于入口不存在；未读、缺失或不可读是缺口，暂停相关写入。首次候选修改前完成目标行为、位置、反证、缺口、修改约束及验证计划判断。
 
 按[完整候选与缺口](references/repair-basis.md#完整候选与缺口)核查，在依赖该决定的动作前输出可观察的 [repair_admission](references/repair-and-verification.md#候选修改前的准入记录)。关键缺口未解时 `allow` 无效，最终报告不能补造事前准入。按该指南的判据分支：
 
-- `experiment_only`：满足[写入前置条件](#保持硬边界)后执行获准可逆实验，处理改动及副产物，再回第 2 步；不直接成为候选，也不解除语义歧义导致的候选停止。
-- `allow_local_candidate`：进入第 4 步，不授予远端发布权限。
+- `experiment_only`：完整读取[执行模式](references/execution-modes.md)，满足[写入前置条件](#保持硬边界)后执行获准可逆实验；涉及构建/验证时先读取[分层验证](references/candidate-verification.md)。处理改动及副产物，再回第 2 步；不直接成为候选，也不解除语义歧义导致的候选停止。
+- `allow_local_candidate`：完整读取[执行模式](references/execution-modes.md)，再进入第 4 步；不授予远端发布权限。
 - `allow_remote_candidate`：取得后进入第 5 步远端发布分支；本地修改不要求提前取得此决定。
-- `stop`：暂停依赖该判断的修改/发布。有具体新线索且权限、预算允许时回第 2 步，否则复用已有判断转第 6 步。
+- `stop`：暂停依赖该判断的修改/发布。有具体新线索且权限、预算允许时回第 2 步；否则按下方停止分支交付。
+
+### 停止分支
+
+按[自主推进与停止](references/diagnosis-and-repair.md#自主推进与停止)核对取证是否足以决定停止。已确定停止且无新证据时，一次公开准入记录引用已有诊断，写明阻塞缺口、停止范围与继续条件；随后进入第 6 步，不另发一轮完整诊断来准备这条记录。
+
+- **本次没有源码/配置修改、写入式实验或构建/验证副作用**：直接走报告交付，不加载执行模式、候选验证、清理或恢复操作指南；指定报告及交付检查本身不触发构建清理流程。
+- **本次已有上述写入或副作用**：先按实际动作完成[恢复](references/execution-modes.md#基线与候选恢复)及适用[清理](references/workspace-cleanup.md)，再交付；停止不免除已有义务，无法安全完成则保留现场并披露缺口。
+
+协作通道已明确不可用时直接结束，不为确认“无通道”再加载协作指南；有可用或待确认通道时按第 6 步处理。独立实验仍须另行满足 `experiment_only`，不因停止分支禁止有价值的独立取证。
 
 ## 4. 实施候选修改
 
-按[构建与更新候选](references/repair-and-verification.md#构建与更新候选)实施获准的完整修改集合。首次修改前按[基线与候选恢复](references/execution-modes.md#基线与候选恢复)保留原始内容、存在性及归属，保护用户、Job 和并发改动；不要求完整 Patch，此时的恢复依据也不是第 5 步的 `capture`。
+按已完整读取的[候选实施与分层验证](references/candidate-verification.md)实施获准的完整修改集合；尚未读全先补读。首次修改前按[基线与候选恢复](references/execution-modes.md#基线与候选恢复)保留原始内容、存在性及归属，保护用户、Job 和并发改动；不要求完整 Patch，此时的恢复依据也不是第 5 步的 `capture`。
 
 新证据动摇目标或机制时回第 2 步；方向、范围、策略或验证计划变化时回第 3 步重评，不沿用失效准入。放弃候选须先安全恢复并核对再创建下一候选；恢复不安全则暂停相关写入，转第 6 步。修改均在获准范围、归属与恢复依据可追溯、验证计划覆盖完整候选后进入第 5 步。
 
 ## 5. 验证与处理结果
 
-按[分层验证](references/repair-and-verification.md#分层验证)、[Attempt 记录](references/core-contracts.md#attempt-记录)和[收据绑定](references/core-contracts.md#收据绑定与失效)关联实际候选、环境与结果。
+按[分层验证](references/candidate-verification.md#分层验证)、[Attempt 记录](references/core-contracts.md#attempt-记录)和[收据绑定](references/core-contracts.md#收据绑定与失效)关联实际候选、环境与结果。
 
 **工作空间写入式检查前**完整读取[清理与校验](references/workspace-cleanup.md)，按其闭环执行：保留恢复依据 → 应用完整候选 → 成功 `capture` → 检查 → 停止写入 → 安全清理文件及本轮空目录 → `check`。无有效基准不开始构建；实验同样适用其前置条件。按实际构建入口选择安全 clean 或登记产物回收，覆盖独立目录/临时产物；保护原有内容并按[清单与结果保留](references/workspace-cleanup.md#清单与结果保留)保留全部已发布审计文件。`mismatch` 须按指南处理并重查，无法解决则披露缺口；源码 `match`、clean 成功与进程退出不能互相替代。
 
 - `local_verify`：在已确认空间检查；CI Job 按[工作空间交付](references/execution-modes.md#ci-job-工作空间交付)保留修复，不 commit/push、发布 ref 或自动触发 CI，不改写原 Job 已固化的失败。
 - `remote_verify`：完成必需发布前检查并取得远端准入，再按[远端验证](references/remote-verification.md)及 Provider 合同发布专用候选、取得准确运行的逐项结果。
 
-失败按[路径选择](references/repair-and-verification.md#失败后的路径选择)更新诊断、重评准入或在既有模式/权限内补验证条件；外部写入结果不明先[只读核对](references/remote-verification.md#外部动作结果不明时)，不盲目重发。取得必需结果，或因无进展、禁止动作、限额、关键缺口不能继续时转第 6 步；说明未执行/未完成原因，不降低验证要求或重置预算。
+取证工具、实验或候选验证实际失败后，先读取[路径选择](references/verification-failures.md)，再更新诊断、重评准入或在既有模式/权限内补验证条件；外部写入结果不明先[只读核对](references/remote-verification.md#外部动作结果不明时)，不盲目重发。取得必需结果，或因无进展、禁止动作、限额、关键缺口不能继续时转第 6 步；说明未执行/未完成原因，不降低验证要求或重置预算。
 
 ## 6. 复核与交付
 
-复核已有事实与决定：只读任务确认判断、缺口及未修复事实；修复任务按[结果判定](references/repair-and-verification.md#结果判定)复核准入、策略、反证和验证，并满足适用的[清理条件](references/workspace-cleanup.md#结束与协作)。未形成的准入/未执行检查如实注明。有分类要求时按[最终分类复核](references/failure-classification.md#初始分类与最终分类)分别判断分类完成度与修复结果。
+复核已有事实与决定：只读任务确认判断、缺口及未修复事实；修复任务按[结果判定](references/repair-and-verification.md#结果判定)复核准入、策略、反证和验证。停止任务沿用[停止分支](#停止分支)的实际写入判断，不为交付重新进入候选或清理流程。未形成的准入/未执行检查如实注明。有分类要求时按[最终分类复核](references/failure-classification.md#初始分类与最终分类)分别判断分类完成度与修复结果。
 
-有新证据且预算允许时返回受影响步骤；修复仍有关键缺口时按[交互与移交](references/execution-modes.md#交互与移交)等待、移交或结束。等待保留调用与预算，只报告当前事实和请求；移交记录实际提交情况，不代表整次完成。无通道不等待或承诺续接，清理缺口不阻止报告/移交。
+有新证据且预算允许时返回受影响步骤；修复仍有关键缺口且协作通道可用或待确认时，读取[交互与移交](references/collaboration.md#交互与移交)再等待、移交或结束。等待保留调用与预算，只报告当前事实和请求；移交记录实际提交情况，不代表整次完成。已明确无通道则结束，不等待或承诺续接；清理缺口不阻止报告/移交。
 
-确定不修改且不做写入式实验时，直接停止交付，不补做候选、构建或加载其操作指南；已有写入仍处理恢复/清理。调用或子任务结束时完整读取[文字版结果报告](references/result-report.md)及其唯一模板，先按任务选择适用表格，再填写六章、格式校验和最终读回复核。无修改、未验证或不适用简述原因；纯文字/工具不可用按报告指南降级。
+调用或子任务结束时完整读取[文字版结果报告](references/result-report.md)及其唯一模板，先按任务选择适用表格，再填写六章、格式校验和最终读回复核。无修改、未验证或不适用简述原因；纯文字/工具不可用按报告指南降级。
 
 ## 保持硬边界
 

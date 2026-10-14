@@ -8,6 +8,49 @@ from pathlib import Path
 from common import EvalError, digest, read_regular, write_json
 from gateway_evidence import read_gateway_evidence
 
+# Never emit arbitrary tool names, IDs, argument values or raw error messages.
+TOOL_NAMES = {"load_skill", "read_skill_resource", "run_skill_script", "read_file", "write_file", "edit_file",
+              "bash", "grep", "glob", "sleep", "todo", "view_image"}
+TOOL_OUTCOMES = {"success", "failed", "error", "invalid_arguments", "cancelled", "interrupted", "incomplete", "denied", "blocked"}
+
+
+def tool_operation_summary(records, gaps):
+    """Native dispatch attempts include failures absent from public tool results.
+
+    Pair by per-source operation ID, including interleaved calls. This is timing
+    metadata only; success does not establish semantic correctness or readback.
+    """
+    if not records:
+        return None
+    starts, finishes = {}, {}
+    for source, event in records:
+        operation = event.get("operation_id")
+        if not isinstance(operation, str) or not operation:
+            gaps.append("tool_operation_id_missing")
+            continue
+        target = starts if event["event_type"] == "tool.operation.started" else finishes
+        key = (source, operation)
+        if key in target:
+            gaps.append("duplicate_tool_operation_metadata")
+            continue
+        target[key] = event["payload"]
+    result = {"started": len(starts), "finished": len(finishes), "outcomes": {}, "by_tool": {},
+              "unmatched_starts": len(starts.keys() - finishes.keys()),
+              "unmatched_finishes": len(finishes.keys() - starts.keys())}
+    if result["unmatched_starts"] or result["unmatched_finishes"]:
+        gaps.append("unpaired_tool_operation_metadata")
+    for key, data in finishes.items():
+        name = starts.get(key, {}).get("tool_name")
+        name = name if isinstance(name, str) and name in TOOL_NAMES else "other_or_unknown"
+        outcome = data.get("outcome")
+        outcome = outcome if isinstance(outcome, str) and outcome in TOOL_OUTCOMES else "unknown"
+        if outcome == "unknown":
+            gaps.append("tool_outcome_unconfirmed")
+        result["outcomes"][outcome] = result["outcomes"].get(outcome, 0) + 1
+        row = result["by_tool"].setdefault(name, {})
+        row[outcome] = row.get(outcome, 0) + 1
+    return result
+
 
 def number(value):
     return type(value) in (int, float) and math.isfinite(value) and value >= 0
@@ -15,6 +58,7 @@ def number(value):
 
 def timing_summary(sessions, process, public_log=None):
     exchanges, gaps = [], []
+    tool_records = []
     sources = {}
     for path in sorted(Path(sessions).glob("sessions/*/trajectory/events.jsonl")):
         raw = read_regular(path)
@@ -29,6 +73,10 @@ def timing_summary(sessions, process, public_log=None):
                 gaps.append("partial_or_invalid_trajectory_line")
                 continue
             kind, data = event.get("event_type"), event["payload"]
+            if kind in {"tool.operation.started", "tool.operation.finished"}:
+                # Retain only pairing/classification metadata even internally.
+                tool_records.append((str(path), {"event_type": kind, "operation_id": event.get("operation_id"),
+                    "payload": {k: data.get(k) for k in ("tool_name", "outcome")}}))
             if kind == "model.exchange.started":
                 if pending is not None:
                     gaps.append("overlapping_exchange_metadata")
@@ -87,7 +135,8 @@ def timing_summary(sessions, process, public_log=None):
                 value = event.get("payload", {}).get("duration_ms")
                 if number(value):
                     tool_ms += value
-    return {"source_sha256": sources, "exchanges": exchanges,
+    native_tools = tool_operation_summary(tool_records, gaps)
+    return {"source_sha256": sources, "exchanges": exchanges, "native_tool_operations": native_tools,
             "tool_results": tools, "sum_tool_duration_ms": tool_ms,
             "gaps": sorted(set(gaps)), "coverage": "metadata_only_not_semantic_evidence"}
 

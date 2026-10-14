@@ -41,6 +41,9 @@ class DeliveryEvidenceTests(unittest.TestCase):
         write_new(skill / "SKILL.md", body)
         write_new(skill / "assets/execution-resources.json", read_regular(REPO / "skills/ci-self-healing/assets/execution-resources.json"))
         self.call("load_skill", {"skill_name": "ci-self-healing"}, body.decode())
+        inputs = read_regular(REPO / "skills/ci-self-healing/references/invocation-inputs.md")
+        write_new(skill / "references/invocation-inputs.md", inputs)
+        self.call("read_skill_resource", {"skill_name": "ci-self-healing", "resource_name": "references/invocation-inputs.md"}, inputs.decode())
         self.event("InvocationMessage", {"text": "repair_admission:\n  decision: stop\n目标行为无法区分；无协作通道。"})
         self.report = self.visible / "output/analysis-fix.md"
         self.call("write_file", {"path": str(self.report), "content": STOP_REPORT}, "done",

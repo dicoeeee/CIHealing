@@ -56,7 +56,7 @@ healing_request:
 
 `executor_role` 和 `collaboration` 来自调用参数或宿主可信上下文。缺省角色为 `unknown`，两种能力缺省为 `false`。能力须已声明且有实际可用通道；本地目录、终端或主 Agent 身份本身不证明可以交互。向主 Agent 移交还须能确认接收者，`parent_ref` 可以由宿主提供或明确路由。
 
-这些字段描述协作条件，不授予代码修改、外部发布或改变策略的权限，也不由 `local_verify` / `remote_verify` 推导。宿主负责实际提问和 Agent 移交通道；本 Skill 提供当前执行者的行为约定。具体分支见[交互与移交](execution-modes.md#交互与移交)。
+这些字段描述协作条件，不授予代码修改、外部发布或改变策略的权限，也不由 `local_verify` / `remote_verify` 推导。宿主负责实际提问和 Agent 移交通道；本 Skill 提供当前执行者的行为约定。具体分支见[交互与移交](collaboration.md#交互与移交)。
 
 ## 调用身份与限额
 
@@ -100,7 +100,7 @@ attempt:
     evidence_refs: []
 ```
 
-`observations` 仅汇总各自执行范围。逐项 `evidence_refs` 对应验证计划的检查标识；记录规则见 [分层验证](repair-and-verification.md#分层验证)，身份要求见下方收据绑定。
+`observations` 仅汇总各自执行范围。逐项 `evidence_refs` 对应验证计划的检查标识；记录规则见 [分层验证](candidate-verification.md#分层验证)，身份要求见下方收据绑定。
 
 `fingerprint` 标识实际候选代码状态，不表示 Patch 已提取或已持久化。候选未提交时，`head_sha` 留空，不能用基线 SHA 代替；工作空间交付见 [执行模式](execution-modes.md#ci-job-工作空间交付)。
 
@@ -122,7 +122,7 @@ repository
 
 HEAD 漂移、候选漂移、策略漂移、相关环境漂移、目标行为的相关变化或企业知识包漂移，会使受影响的决策和收据失效。应重新观察并计算，不要沿用过期的通过结果。跨调用引用旧收据时，保留原调用身份并核对其对当前基线、候选、环境和验证要求的适用性；不把旧结果改写成本次实际执行。
 
-协作时读取 [交互与移交](execution-modes.md#交互与移交)，该处集中定义行为和交接内容。修复结果的唯一判定口径见 [结果判定](repair-and-verification.md#结果判定)。
+协作时读取 [交互与移交](collaboration.md#交互与移交)，该处集中定义行为和交接内容。修复结果的唯一判定口径见 [结果判定](repair-and-verification.md#结果判定)。
 
 ## 可选的学习输出
 

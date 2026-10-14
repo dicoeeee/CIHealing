@@ -1,10 +1,10 @@
 # CI Job 失败现场目录
 
-读取条件与参数含义以主入口的[调用参数与报告输出](../SKILL.md#调用参数与报告输出)为准。本文件描述某一类企业 CI 的输入布局与交付约定，不代表所有企业 CI，也不替代通用的诊断、修复准入、验证和停止规则。
+本场景在主入口完成[调用参数解析](invocation-inputs.md)后选择；尚未完整读取时先补读，再访问现场。本文件描述某一类企业 CI 的输入布局与交付约定，不代表所有企业 CI，也不替代通用的诊断、修复准入、验证和停止规则。
 
 确认本场景的路径与执行约束后，进入主流程第 2 步：先完整读取[通用诊断流程](diagnosis-and-repair.md)，再结合现场证据选择语言或依赖等专门指南。
 
-本场景由流水线在构建失败后启动 Agent，提供失败现场，在 Job 工作空间内修复并验证。启动约定为 `mode: local_verify`，`collaboration.can_ask_user: false`、`collaboration.can_handoff_to_parent: false`；执行者角色仍按可信调用确定。运行时上下文按原 Job 结论是否固化选择，见[运行时上下文](execution-modes.md#运行时上下文)。执行与 Patch 交付沿用[CI Job 工作空间交付](execution-modes.md#ci-job-工作空间交付)。
+本场景由流水线在构建失败后启动 Agent，提供失败现场，在 Job 工作空间内修复并验证。启动约定为 `mode: local_verify`，`collaboration.can_ask_user: false`、`collaboration.can_handoff_to_parent: false`；执行者角色仍按可信调用确定。进入实验、候选修改或验证时，才读取[执行模式](execution-modes.md)，按原 Job 结论是否固化确认运行时上下文，并遵守其中的 CI Job 工作空间交付约定。
 
 ## 调用与路径
 
@@ -56,4 +56,4 @@ output_dir: /path/to/healing-output
 
 输出目录位于源码内时，除报告外，也将不参与构建的本次证据文件标明供提取脚本排除；安全边界沿用报告指南。按其交付检查核对已声明产物，只报告实际观察到的 Patch 提取或归档结果。
 
-本场景的关键缺口按[自主推进与停止](diagnosis-and-repair.md#自主推进与停止)取证；仍未解决时，使用[交互与移交](execution-modes.md#交互与移交)中的通道不可用分支结束，报告缺口与继续条件。
+本场景的关键缺口按[自主推进与停止](diagnosis-and-repair.md#自主推进与停止)取证；仍未解决且无具体新线索时，按入口[停止分支](../SKILL.md#停止分支)结束，报告缺口与继续条件。本场景已明确无协作通道，无需为结束另读协作指南。

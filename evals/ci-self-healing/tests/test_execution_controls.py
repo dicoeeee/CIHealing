@@ -166,6 +166,40 @@ class ExecutionControlsTests(unittest.TestCase):
         self.assertEqual(result["gateway_statuses"], [401])
         self.assertNotIn("SECRET", json.dumps(result))
 
+    def test_native_argument_failures_are_counted_without_public_results_or_content(self):
+        events = []
+        # Interleaved operations: tool results are absent for pre-dispatch errors.
+        for operation, name in (("one", "read_file"), ("two", "read_file"), ("three", "SECRET")):
+            events.append({"event_type": "tool.operation.started", "operation_id": operation,
+                           "payload": {"tool_name": name, "arguments": "SECRET", "tool_context": "SECRET"}})
+        for operation, outcome in (("two", "invalid_arguments"), ("one", "success"), ("three", "SECRET")):
+            events.append({"event_type": "tool.operation.finished", "operation_id": operation,
+                           "payload": {"outcome": outcome, "error_kind": "SECRET", "result": "SECRET", "reasoning": "SECRET"}})
+        write_new(self.root / "sessions/s/trajectory/events.jsonl", "\n".join(json.dumps(e) for e in events))
+        write_new(self.root / "public.log", "")
+        result = timing_summary(self.root, {}, self.root / "public.log")
+        self.assertNotIn("SECRET", json.dumps(result))
+        self.assertEqual(result["tool_results"], 0)
+        native = result["native_tool_operations"]
+        self.assertEqual((native["started"], native["finished"]), (3, 3))
+        self.assertEqual(native["by_tool"]["read_file"], {"invalid_arguments": 1, "success": 1})
+        self.assertEqual(native["outcomes"], {"invalid_arguments": 1, "success": 1, "unknown": 1})
+        self.assertIn("tool_outcome_unconfirmed", result["gaps"])
+
+    def test_duplicate_unpaired_and_missing_operation_metadata_stays_incomplete(self):
+        events = [
+            {"event_type": "tool.operation.started", "operation_id": "one", "payload": {"tool_name": "read_file"}},
+            {"event_type": "tool.operation.finished", "operation_id": "two", "payload": {"outcome": "success"}},
+            {"event_type": "tool.operation.finished", "operation_id": "two", "payload": {"outcome": "success"}},
+            {"event_type": "tool.operation.finished", "payload": {"outcome": "success"}}]
+        write_new(self.root / "sessions/s/trajectory/events.jsonl", "\n".join(json.dumps(e) for e in events))
+        result = timing_summary(self.root, {})
+        native = result["native_tool_operations"]
+        self.assertEqual(native["finished"], 1)
+        self.assertEqual((native["unmatched_starts"], native["unmatched_finishes"]), (1, 1))
+        self.assertTrue({"duplicate_tool_operation_metadata", "tool_operation_id_missing",
+                         "unpaired_tool_operation_metadata"} <= set(result["gaps"]))
+
     def test_interrupted_exchange_ended_but_did_not_complete_successfully(self):
         events = [{"event_type": "model.exchange.started", "occurred_at": "2026-01-01T00:00:00Z", "payload": {}},
                   {"event_type": "model.exchange.finished", "payload": {"outcome": "interrupted", "chunk_count": 20}}]
@@ -218,6 +252,7 @@ class ExecutionControlsTests(unittest.TestCase):
         self.assertIn("native_timing_unavailable", result["gaps"])
         self.assertIsNone(result["tool_results"])
         self.assertIsNone(result["sum_tool_duration_ms"])
+        self.assertIsNone(result["native_tool_operations"])
 
     def test_diagnostics_tampering_is_rejected(self):
         from common import digest

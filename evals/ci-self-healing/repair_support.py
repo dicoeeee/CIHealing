@@ -12,9 +12,13 @@ ADAPTER_FILES = ("common.py", "repair_support.py", "chrys_capabilities.py", "chr
 RUNTIME_CONTRACT = "repair-runtime-v2"
 LEGACY_EXECUTION_CONTRACT = "skill-execution-v1"
 RECOVERY_EXECUTION_CONTRACT = "skill-execution-v2"
-EXECUTION_CONTRACT = "skill-execution-v3"
-EXECUTION_CONTRACTS = {LEGACY_EXECUTION_CONTRACT, RECOVERY_EXECUTION_CONTRACT, EXECUTION_CONTRACT}
-RECOVERY_EXECUTION_CONTRACTS = {RECOVERY_EXECUTION_CONTRACT, EXECUTION_CONTRACT}
+SPLIT_EXECUTION_CONTRACT = "skill-execution-v3"
+POLICY_EXECUTION_CONTRACT = "skill-execution-v4"
+EXECUTION_CONTRACT = "skill-execution-v5"
+POLICY_EXECUTION_CONTRACTS = {POLICY_EXECUTION_CONTRACT, EXECUTION_CONTRACT}
+SPLIT_EXECUTION_CONTRACTS = {SPLIT_EXECUTION_CONTRACT, *POLICY_EXECUTION_CONTRACTS}
+RECOVERY_EXECUTION_CONTRACTS = {RECOVERY_EXECUTION_CONTRACT, *SPLIT_EXECUTION_CONTRACTS}
+EXECUTION_CONTRACTS = {LEGACY_EXECUTION_CONTRACT, *RECOVERY_EXECUTION_CONTRACTS}
 EXECUTION_RESOURCE_DECLARATION = {"schema": "ci-skill-execution-resources/v1", "contract": EXECUTION_CONTRACT}
 ADMISSION_CHANNEL_CONTRACT = "agent-message-v1"
 DELIVERY_CONTRACT = "stop-artifact-v1"
@@ -33,9 +37,11 @@ def execution_contract(skill):
         if "references/repair-basis.md" in read_regular(skill / "SKILL.md").decode():
             raise EvalError("split Skill resource declaration missing")
         return RECOVERY_EXECUTION_CONTRACT
-    if read_json(declaration) != EXECUTION_RESOURCE_DECLARATION:
+    value = read_json(declaration)
+    if value not in [{**EXECUTION_RESOURCE_DECLARATION, "contract": version}
+                     for version in SPLIT_EXECUTION_CONTRACTS]:
         raise EvalError("unsupported Skill resource declaration")
-    return EXECUTION_CONTRACT
+    return value["contract"]
 
 
 def admission_channel_notice():

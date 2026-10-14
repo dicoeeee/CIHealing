@@ -41,6 +41,7 @@ from chrys.service.skills.adapter import create_skills_provider
 from chrys.service.profiles.agents.schema import SkillsConfig
 from chrys_capabilities import observer_capabilities
 capabilities = observer_capabilities()
+readback = asyncio.run(chrys_preflight.check_read_file())
 root = pathlib.Path(sys.argv[3]); skill = root / "ci-self-healing"; profiles = root / "profiles"
 for name, data in skill_from_dir(REPO / "skills/ci-self-healing").items():
     write_new(skill / name, data)
@@ -55,7 +56,7 @@ with mock.patch("chrys.foundation.platform.get_platform", return_value=types.Sim
         paths=[str(old)], auto_load_user_agents_skills=False, auto_load_cwd_agents_skills=False)))
     if provider is None or provider.skill_names() or not warnings:
         raise ValueError("old-path negative control did not fail as expected")
-print(json.dumps({**capabilities, "native_skill_tools": "passed", "old_path_negative_control": "rejected", "model_calls": 0}))
+print(json.dumps({**capabilities, "native_skill_tools": "passed", "read_file": readback, "old_path_negative_control": "rejected", "model_calls": 0}))
 '''
         return subprocess.run([sys.executable, "-B", "-c", script, str(root / "package"),
                                str(Path(__file__).resolve().parents[1]), str(root / "probe")], timeout=45).returncode

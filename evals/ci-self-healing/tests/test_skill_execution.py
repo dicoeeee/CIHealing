@@ -9,7 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from common import EvalError, changes, digest, json_bytes, read_regular, snapshot, write_new
-from repair_support import (EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT, RECOVERY_EXECUTION_CONTRACT,
+from repair_support import (EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT, RECOVERY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT,
                             execution_contract, source_state)
 from skill_execution import audit_execution, is_build, workspace_result
 
@@ -32,8 +32,9 @@ class SkillExecutionTests(unittest.TestCase):
         self.events = []
         self.previous = snapshot(self.visible)
         write_new(self.skill / "assets/execution-resources.json", read_regular(SKILL / "assets/execution-resources.json"))
-        for name in ("SKILL.md", "references/diagnosis-and-repair.md", "references/repair-basis.md",
-                     "references/repair-and-verification.md", "references/workspace-cleanup.md"):
+        for name in ("SKILL.md", "references/invocation-inputs.md", "references/diagnosis-and-repair.md", "references/repair-basis.md",
+                     "references/repair-and-verification.md", "references/enterprise-policy.md",
+                     "references/candidate-verification.md", "references/workspace-cleanup.md"):
             self.load_resource(name)
 
     def load_resource(self, name):
@@ -156,6 +157,30 @@ class SkillExecutionTests(unittest.TestCase):
         self.call("bash", {"command": "rmdir target/job-owned-empty"}, "[exit_code: 0]", old_empty.rmdir)
         self.assertEqual(self.workspace("check")["result"], "mismatch")
         self.assertIn("final_native_cleanup_match_unconfirmed", self.checks())
+
+    def test_file_only_inventory_misses_empty_output_directories(self):
+        old_empty = self.repo / "target/job-owned-empty"
+        old_empty.mkdir()
+        self.workspace("capture")
+        manifest = (self.out / "one.json").read_bytes()
+        self.build(); self.clean(dirs=False)
+        # A real file-only observation looks clean while directory residue remains.
+        listed = subprocess.run(["find", str(self.repo / "target"), "-type", "f"],
+                                capture_output=True, text=True, check=True).stdout.splitlines()
+        self.assertEqual(listed, [str(self.repo / "target/preexisting.txt")])
+        inventory = snapshot(self.repo / "target", skip_git=False)
+        added_dirs = {path for path, row in inventory.items() if row["kind"] == "directory"}
+        self.assertIn("generated-sources/annotations", added_dirs)
+        mismatch = self.workspace("check")
+        self.assertEqual(mismatch["result"], "mismatch")
+        self.assertEqual(mismatch["counts"]["added"], 2)
+        # Ownership is established by the fixture build, not inferred from newness.
+        (self.repo / "target/generated-sources/annotations").rmdir()
+        (self.repo / "target/generated-sources").rmdir()
+        self.event("InvocationMessage", {"text": "owned empty output directories removed"})
+        self.assertEqual(self.workspace("check")["result"], "match")
+        self.assertTrue(old_empty.is_dir())
+        self.assertEqual((self.out / "one.json").read_bytes(), manifest)
 
     def test_superseded_capture_is_retained_while_current_capture_verifies_candidate(self):
         old, original, _ = self.capture_before_and_after_candidate()
@@ -316,10 +341,45 @@ class SkillExecutionTests(unittest.TestCase):
                   lambda: (self.repo / "src/main/java/Example.java").write_text("class Changed {}"))
         self.workspace("capture"); self.build(); self.clean(); self.workspace("check")
 
+    def test_unread_policy_blocks_write_even_if_report_claims_unconfigured(self):
+        self.truncate_resource("references/enterprise-policy.md")
+        self.candidate_and_verified_cleanup()
+        self.event("InvocationMessage", {"text": "企业策略未配置，全部通过"})
+        check = "required_skill_resource_not_loaded_before_action:references/enterprise-policy.md"
+        self.assertIn(check, self.checks())
+        self.assertEqual(self.audit()["dimensions"]["native_protocol"]["status"], "failed")
+
+    def test_policy_read_after_write_cannot_retroactively_authorize_it(self):
+        self.truncate_resource("references/enterprise-policy.md")
+        self.candidate_and_verified_cleanup()
+        before = self.audit()["failures"]
+        self.load_resource("references/enterprise-policy.md")
+        self.assertEqual(self.audit()["failures"], before)
+
+    def test_policy_missing_from_frozen_package_is_not_unconfigured(self):
+        (self.skill / "references/enterprise-policy.md").unlink()
+        self.candidate_and_verified_cleanup()
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/enterprise-policy.md", self.checks())
+
+    def test_complete_unconfigured_policy_read_allows_other_gates_to_decide(self):
+        self.candidate_and_verified_cleanup()
+        self.assertEqual(self.audit()["failures"], [])
+
+    def test_v3_keeps_historical_policy_read_coverage(self):
+        self.truncate_resource("references/enterprise-policy.md")
+        declaration = self.skill / "assets/execution-resources.json"
+        value = json.loads(declaration.read_text())
+        value["contract"] = SPLIT_EXECUTION_CONTRACT
+        declaration.write_text(json.dumps(value))
+        self.candidate_and_verified_cleanup()
+        self.assertEqual(execution_contract(self.skill), SPLIT_EXECUTION_CONTRACT)
+        self.assertEqual(self.audit(contract=SPLIT_EXECUTION_CONTRACT)["failures"], [])
+
     def test_specialist_and_basis_do_not_replace_common_diagnosis_read(self):
         self.events = []
-        for name in ("SKILL.md", "references/java-maven-compilation.md", "references/repair-basis.md",
-                     "references/repair-and-verification.md", "references/workspace-cleanup.md"):
+        for name in ("SKILL.md", "references/invocation-inputs.md", "references/java-maven-compilation.md", "references/repair-basis.md",
+                     "references/repair-and-verification.md", "references/enterprise-policy.md",
+                     "references/candidate-verification.md", "references/workspace-cleanup.md"):
             self.load_resource(name)
         self.candidate_and_verified_cleanup()
         result = self.audit()
@@ -357,8 +417,113 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual(result["recoveries"], [])
 
     def test_stop_does_not_require_candidate_or_cleanup_branch_reads(self):
-        for resource in ("references/repair-basis.md", "references/repair-and-verification.md", "references/workspace-cleanup.md"):
+        for resource in ("references/repair-basis.md", "references/repair-and-verification.md", "references/enterprise-policy.md",
+                         "references/candidate-verification.md", "references/workspace-cleanup.md"):
             self.truncate_resource(resource)
+        self.assertEqual(self.audit("stop")["failures"], [])
+
+    def input_check(self):
+        return "required_skill_resource_not_loaded_before_action:references/invocation-inputs.md"
+
+    def test_unread_inputs_block_scene_access_even_with_explicit_absolute_path(self):
+        self.truncate_resource("references/invocation-inputs.md")
+        self.call("bash", {"command": "ls " + str(self.visible / "scene")}, "sourcecode")
+        self.assertIn(self.input_check(), self.checks("stop"))
+
+    def test_missing_inputs_file_cannot_be_replaced_by_success_prose_or_scene_guide(self):
+        (self.skill / "references/invocation-inputs.md").unlink()
+        self.load_resource("references/ci-job-failure-directory.md")
+        self.event("InvocationMessage", {"text": "两个路径已经校验，参数指南已读全"})
+        self.call("read_file", {"path": str(self.repo / "src/main/java/Example.java")}, "class Example {}")
+        self.assertIn(self.input_check(), self.checks("stop"))
+
+    def test_late_inputs_read_does_not_erase_prior_access_violation(self):
+        self.truncate_resource("references/invocation-inputs.md")
+        self.call("glob", {"pattern": "**/*.java"}, "Example.java")
+        failures = self.audit("stop")["failures"]
+        self.load_resource("references/invocation-inputs.md")
+        self.call("read_file", {"path": "Example.java"}, "class Example {}")
+        self.assertEqual(self.audit("stop")["failures"], failures)
+        self.assertEqual([f["check"] for f in failures], [self.input_check()])
+
+    def test_complete_inputs_after_truncation_before_access_is_valid(self):
+        self.truncate_resource("references/invocation-inputs.md")
+        self.load_resource("references/invocation-inputs.md")
+        self.call("read_file", {"path": "Example.java"}, "class Example {}")
+        self.assertEqual(self.audit("stop")["failures"], [])
+
+    def test_parallel_input_read_must_finish_before_dependent_access(self):
+        self.truncate_resource("references/invocation-inputs.md")
+        self.event("InvocationToolCallStart", {"tool_name": "read_skill_resource", "call_id": "inputs",
+                   "args": {"skill_name": "ci-self-healing", "resource_name": "references/invocation-inputs.md"}})
+        self.call("read_file", {"path": "Example.java"}, "class Example {}")
+        self.event("InvocationToolCallResult", {"call_id": "inputs",
+                   "result": read_regular(SKILL / "references/invocation-inputs.md").decode()})
+        self.assertIn(self.input_check(), self.checks("stop"))
+
+    def test_unread_inputs_block_report_write_and_script_but_not_help_or_metadata(self):
+        self.truncate_resource("references/invocation-inputs.md")
+        self.call("todo_write", {}, "recorded")
+        self.call("bash", {"command": "date -u"}, "synthetic time")
+        self.call("run_skill_script", {"skill_name": "ci-self-healing", "script_name": "scripts/report_check.py",
+                  "arguments": ["--help"]}, "help")
+        self.assertEqual(self.audit("stop")["failures"], [])
+        self.call("write_file", {"path": str(self.out / "analysis-fix.md")}, "done")
+        self.call("run_skill_script", {"skill_name": "ci-self-healing", "script_name": "scripts/report_check.py",
+                  "arguments": ["--report", str(self.out / "analysis-fix.md")]}, "synthetic")
+        self.assertEqual([f["check"] for f in self.audit("stop")["failures"]], [self.input_check()] * 2)
+
+    def test_v4_does_not_gain_new_input_gate_and_retains_policy_gate(self):
+        declaration = self.skill / "assets/execution-resources.json"
+        value = json.loads(declaration.read_text()); value["contract"] = POLICY_EXECUTION_CONTRACT
+        declaration.write_text(json.dumps(value))
+        self.truncate_resource("references/invocation-inputs.md")
+        self.candidate_and_verified_cleanup()
+        self.assertEqual(self.audit(contract=POLICY_EXECUTION_CONTRACT)["failures"], [])
+        self.truncate_resource("references/enterprise-policy.md")
+        checks = [f["check"] for f in self.audit(contract=POLICY_EXECUTION_CONTRACT)["failures"]]
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/enterprise-policy.md", checks)
+        self.assertNotIn(self.input_check(), checks)
+
+    def test_stop_report_only_does_not_enter_build_cleanup_protocol(self):
+        self.events = []
+        for resource in ("SKILL.md", "references/invocation-inputs.md"):
+            self.load_resource(resource)
+        self.call("write_file", {"path": str(self.out / "analysis-fix.md")}, "done",
+                  lambda: write_new(self.out / "analysis-fix.md", "synthetic stop report"))
+        self.call("read_file", {"path": str(self.out / "analysis-fix.md")}, "synthetic stop report")
+        result = self.audit("stop")
+        self.assertEqual(result["failures"], [])
+        self.assertEqual(result["dimensions"]["cleanup_evidence"]["status"], "not_required")
+        # Protocol-only assertion; neither prose nor resource loading proves semantic stop eligibility.
+        self.assertEqual(result["builds"], [])
+
+    def test_stop_after_build_still_needs_cleanup_even_if_report_says_no_work(self):
+        self.workspace("capture"); self.build()
+        self.event("InvocationMessage", {"text": "stop，无需清理"})
+        self.assertIn("final_native_cleanup_match_unconfirmed", self.checks("stop"))
+        self.clean(); self.workspace("check")
+        self.assertEqual(self.audit("stop")["failures"], [])
+        self.assertEqual(self.audit("stop")["dimensions"]["cleanup_evidence"]["status"], "confirmed")
+
+    def test_stop_after_build_cannot_waive_prior_cleanup_guide_omission(self):
+        self.truncate_resource("references/workspace-cleanup.md")
+        self.workspace("capture"); self.build(); self.clean(); self.workspace("check")
+        self.load_resource("references/workspace-cleanup.md")
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/workspace-cleanup.md", self.checks("stop"))
+
+    def test_verification_branch_must_be_read_before_build_not_after(self):
+        self.truncate_resource("references/candidate-verification.md")
+        self.candidate_and_verified_cleanup()
+        self.load_resource("references/candidate-verification.md")
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/candidate-verification.md", self.checks())
+
+    def test_no_build_experiment_does_not_require_candidate_verification_branch(self):
+        self.truncate_resource("references/candidate-verification.md")
+        self.call("edit_file", {"path": "Example.java"}, "experiment",
+                  lambda: (self.repo / "src/main/java/Example.java").write_text("class Probe {}"))
+        self.call("edit_file", {"path": "Example.java"}, "restored",
+                  lambda: (self.repo / "src/main/java/Example.java").write_text("class Example {}\n"))
         self.assertEqual(self.audit("stop")["failures"], [])
 
     def test_resource_layout_selects_frozen_package_without_downgrade(self):

@@ -10,7 +10,7 @@ import json
 from collections import Counter
 
 from common import EvalError, digest, json_bytes
-from repair_support import EXECUTION_CONTRACT
+from repair_support import EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT
 
 
 FORMAT = "ci-review-projection-v2"
@@ -42,6 +42,21 @@ SPLIT_SECTIONS = {
     "references/output-delivery.md": [],
 }
 
+POLICY_SECTIONS = {
+    **SPLIT_SECTIONS,
+    "references/repair-and-verification.md": ["修复依据", "候选修改前的准入记录", "决定修复准入", "结果判定"],
+    "references/candidate-verification.md": ["构建与更新候选", "分层验证"],
+    "references/verification-failures.md": ["失败后的路径选择"],
+    "references/execution-modes.md": ["基线与候选恢复", "CI Job 工作空间交付"],
+    "references/collaboration.md": ["交互与移交"],
+    "references/enterprise-policy.md": ["企业策略声明", "读取与信任", "适用范围与分类依赖", "判断与行动", "交付"],
+}
+
+INPUT_SECTIONS = {
+    **POLICY_SECTIONS,
+    "SKILL.md": ["1. 确认任务与现场", "3. 判断修复准入", "保持硬边界"],
+}
+
 
 def sections(text, wanted):
     lines = text.splitlines(keepends=True)
@@ -70,7 +85,9 @@ def project_packet(packet, trial_prefix=None):
     value = copy.deepcopy(packet)
     calls = {e["payload"].get("call_id"): e for e in packet["events"] if e["kind"] == "InvocationToolCallStart"}
     execution = packet.get("deterministic", {}).get("execution_checks", {})
-    section_map = SPLIT_SECTIONS if execution.get("contract") == EXECUTION_CONTRACT else SECTIONS
+    section_map = {SPLIT_EXECUTION_CONTRACT: SPLIT_SECTIONS,
+                   POLICY_EXECUTION_CONTRACT: POLICY_SECTIONS,
+                   EXECUTION_CONTRACT: INPUT_SECTIONS}.get(execution.get("contract"), SECTIONS)
     confirmed = {(r["seq"], r["resource"]) for r in execution.get("resource_reads", []) if r.get("complete") is True}
     projection = []
     for event in value["events"]:

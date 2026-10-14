@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from chrys_observer import Recorder
-from chrys_preflight import check_search, check_shell, check_skills, selected_skills
+from chrys_preflight import check_read_file, check_search, check_shell, check_skills, selected_skills
 from common import EvalError, digest, read_json, read_regular, run_logged, write_json, write_new
 from grading import grade_trial, normalize_trace
 from repair_support import (ADAPTER_FILES, RUNTIME_CONTRACT, SESSION_MOUNT, SKILL_MOUNT,
@@ -164,6 +164,33 @@ class RepairRuntimeTests(unittest.TestCase):
                      ["CI_EVAL_SHELL_STDOUT\n[exit_code: 0]"], [good, good], [None]):
             with self.subTest(results=rows), self.assertRaises(EvalError):
                 self.shell_probe(rows)
+
+    def readback_probe(self, values):
+        function = types.SimpleNamespace(name="read_file", invoke=mock.AsyncMock(side_effect=values))
+        model = types.ModuleType("chrys.foundation.models.session_env")
+        model.SessionEnvironment = mock.Mock()
+        filesystem = types.ModuleType("chrys.service.tools.builtins.filesystem")
+        filesystem.FilesystemTools = mock.Mock()
+        filesystem.FilesystemTools.return_value.tools.return_value = [function]
+        with mock.patch.dict(sys.modules, {model.__name__: model, filesystem.__name__: filesystem}):
+            result = asyncio.run(check_read_file())
+        return result, function
+
+    def test_readback_probe_validates_array_and_rejects_string_without_coercion(self):
+        good = "CI_EVAL_REPORT_START\nCI_EVAL_REPORT_END"
+        result, function = self.readback_probe([good, good, TypeError("Invalid arguments for read_file")])
+        self.assertTrue(result["string_line_range_rejected"])
+        calls = function.invoke.await_args_list
+        self.assertNotIn("line_range", calls[0].kwargs["arguments"])
+        self.assertEqual(calls[1].kwargs["arguments"]["line_range"], [1, -1])
+        self.assertEqual(calls[2].kwargs["arguments"]["line_range"], "[1, 20]")
+        self.assertFalse(Path(calls[0].kwargs["arguments"]["path"]).exists())
+
+    def test_readback_probe_does_not_mistake_partial_read_or_runtime_error_for_pass(self):
+        good = "CI_EVAL_REPORT_START\nCI_EVAL_REPORT_END"
+        for values in (["CI_EVAL_REPORT_START"], [good, good, good], [good, good, TypeError("runtime failed")]):
+            with self.subTest(values=values), self.assertRaises(EvalError):
+                self.readback_probe(values)
 
     def test_empty_inventory_is_also_bound(self):
         (self.root / "native-session").mkdir()

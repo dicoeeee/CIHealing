@@ -68,6 +68,35 @@ async def check_skills(profile_dir, agent):
             "run_skill_script": True, "script_nonzero_exit": True}
 
 
+async def check_read_file():
+    """Exercise the selected runtime's argument validator and full report read.
+
+    No model, profiles or user files. Stringified line_range caused two real
+    pre-dispatch failures; never coerce such arguments in the adapter.
+    """
+    from chrys.foundation.models.session_env import SessionEnvironment
+    from chrys.service.tools.builtins.filesystem import FilesystemTools
+    function = next((t for t in FilesystemTools(SessionEnvironment.capture()).tools()
+                     if t.name == "read_file"), None)
+    if not callable(getattr(function, "invoke", None)):
+        raise EvalError("native read_file validator unavailable")
+    with tempfile.TemporaryDirectory(prefix="ci-eval-readback-") as temp:
+        report = Path(temp) / "analysis-fix.md"
+        report.write_text("CI_EVAL_REPORT_START\nCI_EVAL_REPORT_END\n")
+        for extra in ({}, {"line_range": [1, -1], "max_tokens": 1000}):
+            value = await function.invoke(arguments={"path": str(report), **extra}, skip_parsing=True)
+            if not isinstance(value, str) or any(marker not in value for marker in ("CI_EVAL_REPORT_START", "CI_EVAL_REPORT_END")):
+                raise EvalError("native read_file incomplete synthetic report readback")
+        try:
+            await function.invoke(arguments={"path": str(report), "line_range": "[1, 20]"}, skip_parsing=True)
+        except TypeError as exc:
+            if "Invalid arguments" not in str(exc):
+                raise EvalError("native read_file failed outside argument validation") from None
+        else:
+            raise EvalError("native read_file accepted stringified line_range")
+    return {"full_readback": True, "array_line_range": True, "string_line_range_rejected": True, "model_calls": 0}
+
+
 async def check_search():
     from chrys.service.tools.builtins.search import _find_rg, _grep_impl
     rg = _find_rg()
@@ -171,7 +200,7 @@ def main():
     help_result = subprocess.run(["chrys", "run", "--help"], check=True, capture_output=True, text=True, timeout=10)
     require_cli_options(help_result.stdout, ("--agent", "--model", "--workdir", "--task", "--json"))
     result = {"status": "passed", **capabilities, "search": asyncio.run(check_search()),
-              "shell": asyncio.run(check_shell()), "headless_cli": True}
+              "shell": asyncio.run(check_shell()), "read_file": asyncio.run(check_read_file()), "headless_cli": True}
     if args.profiles:
         result["skill"] = asyncio.run(check_skills(args.profiles, args.agent))
     print(json.dumps(result))

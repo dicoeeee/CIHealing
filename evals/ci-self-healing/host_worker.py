@@ -48,6 +48,7 @@ def preflight(layout):
     checks = observer_capabilities()
     checks["skill"] = asyncio.run(chrys_preflight.check_skills(layout["config"], "EvalCode"))
     checks["search"] = asyncio.run(chrys_preflight.check_search())
+    checks["read_file"] = asyncio.run(chrys_preflight.check_read_file())
     checks["shell"] = asyncio.run(chrys_preflight.check_shell())
     checks["git"] = asyncio.run(chrys_preflight.check_git())
     # Real CLI profile discovery, with no task/model execution.

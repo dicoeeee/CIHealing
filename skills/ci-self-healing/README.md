@@ -420,12 +420,15 @@ python3 -B -m unittest discover -s tests -v
 - [references/workspace-recovery.md](references/workspace-recovery.md)：漏采/误采恢复、候选撤销和状态文件异常，仅在对应分支读取。
 - [scripts/workspace_check.py](scripts/workspace_check.py)：只读工作空间 `capture/check` 工具，不编译、不清理、不恢复。
 - [tests/test_workspace_check.py](tests/test_workspace_check.py)：合成工作空间、文件保护与 CLI 校验测试。
-- [references/repair-and-verification.md](references/repair-and-verification.md)：准入、候选、分层验证和结果判定。
+- [references/repair-and-verification.md](references/repair-and-verification.md)：准入决定、验证计划要求和结果判定。
+- [references/candidate-verification.md](references/candidate-verification.md)：获准候选实施及分层验证；候选修改或构建/验证前读取。
+- [references/verification-failures.md](references/verification-failures.md)：取证工具、实验或候选验证实际失败后的处理。
 - [references/enterprise-policy.md](references/enterprise-policy.md)：企业附加策略的固定入口、适用范围核对、禁修与审批边界；通用发行包默认未配置。
-- [references/execution-modes.md](references/execution-modes.md)：本地/远端模式、工作空间保护和协作交付。
+- [references/execution-modes.md](references/execution-modes.md)：本地/远端模式、工作空间保护和 Job 交付。
+- [references/collaboration.md](references/collaboration.md)：需要澄清、审批或移交时读取的协作规则；不新增通信权限。
 - [references/output-delivery.md](references/output-delivery.md)：报告目录、同名文件保护、工作空间布局与文件交付降级。
 - [references/result-report.md](references/result-report.md)：最终报告填写、条件裁剪和交付校验；模板及六章格式保持不变。
-- [assets/execution-resources.json](assets/execution-resources.json)：宿主执行审计的资源布局声明，不作为 Agent 的额外必读资源。当前布局使用 v3；旧冻结包没有此声明时按 v2 选择，新布局缺少声明或必要资源会拒绝审计，不以旧要求降级。历史记录仍使用自身声明的合同。
+- [assets/execution-resources.json](assets/execution-resources.json)：宿主执行审计的资源布局声明，不作为 Agent 的额外必读资源。当前布局使用 v5，补充参数指南在现场/输出动作前的完整读取审计；已声明 v3/v4 的旧包保持原版本，更早的无声明旧包按 v2 选择，新布局缺少声明或必要资源会拒绝审计，不以旧要求降级。历史记录仍使用自身声明的合同。
 - [references/provider-contract.md](references/provider-contract.md)：CI Provider 能力与证据边界。
 - [references/providers/provider-access.md](references/providers/provider-access.md)：Provider 选择与权限、本地/MCP/CLI 访问和证据交回规则。
 - [references/providers/github-actions.md](references/providers/github-actions.md)：GitHub Actions 的身份核对与只读接入示例。
@@ -441,6 +444,10 @@ python3 -B -m unittest discover -s tests -v
 | 失败绑定、主动取证与停止取证 | `references/diagnosis-and-repair.md` | 只读或修复诊断 |
 | 目标行为、语义分歧与完整候选缺口 | `references/repair-basis.md` | 写入式实验或候选准入评估前 |
 | 准入决定、验证计划与结果判定 | `references/repair-and-verification.md` | 修复分支的相关动作前 |
+| 企业策略声明与限制处置 | `references/enterprise-policy.md` | 写入式实验、候选修改或验证前 |
+| 候选实施与分层验证 | `references/candidate-verification.md` | 候选修改或构建/验证前；只读停止跳过 |
+| 失败后的路径选择 | `references/verification-failures.md` | 实际取证工具/实验/候选验证失败后，选择下一动作前 |
+| 澄清、审批与移交 | `references/collaboration.md` | 需要协作且有已授权可用通道时，请求前 |
 | 正常清理与校验 | `references/workspace-cleanup.md` | 首次写入式实验或构建前 |
 | 基准恢复、候选撤销与状态文件异常 | `references/workspace-recovery.md` | 对应异常分支，恢复/重采/撤销前 |
 | 输出路径与布局 | `references/output-delivery.md` | 使用报告目录前 |
