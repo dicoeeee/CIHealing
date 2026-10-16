@@ -52,6 +52,33 @@ class PacketTests(unittest.TestCase):
             q = project_packet(p)
             self.assertEqual(q["events"], p["events"])
 
+    def test_case_guide_and_mcp_cli_evidence_are_retained_verbatim(self):
+        resource = "references/case-retrieval.md"
+        body = read_regular(Path(__file__).resolve().parents[3] / "skills/ci-self-healing" / resource).decode()
+        for complete in (True, False):
+            with self.subTest(complete=complete):
+                p = self.packet(resource)
+                p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
+                p["deterministic"]["execution_checks"]["resource_reads"][0]["complete"] = complete
+                p["events"][1]["payload"]["result"] = body if complete else body[:len(body) // 2]
+                p["events"][2]["payload"]["text"] = "已查日志、源码与 MR，兼容性仍未决；转案例建议，本轮不恢复自愈。"
+                p["events"] += [
+                    {"seq": 5, "evidence_id": "E0005", "kind": "InvocationToolCallStart", "payload": {
+                        "tool_name": "wiki_search", "call_id": "search", "args": {"query": "missing symbol", "space": "example"}}},
+                    {"seq": 6, "evidence_id": "E0006", "kind": "InvocationToolCallResult", "payload": {
+                        "call_id": "search", "result": {"results": [{"id": "C1", "version": 2}], "next_cursor": "page-2"}}},
+                    {"seq": 7, "evidence_id": "E0007", "kind": "InvocationToolCallStart", "payload": {
+                        "tool_name": "bash", "call_id": "read", "args": {"command": "example-wiki read C1"}}},
+                    {"seq": 8, "evidence_id": "E0008", "kind": "InvocationToolCallResult", "payload": {
+                        "call_id": "read", "result": "source=example id=C1 version=3\nCase conflicts with current contract; not applicable.\n[exit_code: 0]"}},
+                    {"seq": 9, "evidence_id": "E0009", "kind": "InvocationMessage", "payload": {
+                        "text": "C1 不可直接套用；仅建议核对迁移约束，未实施或验证；已有 mismatch 仍须处理，不以建议交付免除清理。"}}]
+                before = copy.deepcopy(p)
+                projected = project_packet(p)
+                self.assertEqual(p, before)
+                self.assertEqual(projected["events"], p["events"])
+                self.assertEqual(projected["files"], p["files"])
+
     def test_missing_required_clause_stops_instead_of_silent_omission(self):
         p = self.packet(); p["events"][1]["payload"]["result"] = "# shortened guide"
         with self.assertRaisesRegex(EvalError, "clause missing"):

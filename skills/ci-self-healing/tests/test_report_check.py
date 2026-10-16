@@ -249,6 +249,69 @@ class ReportCheckTests(unittest.TestCase):
         text = text.replace("MR-1 描述及类型定义。", "先核对 MR-1 的描述，再查看类型定义，两份材料共同支持补充导入。")
         self.assertEqual(self.errors(text), [])
 
+    def test_case_advice_preserves_prior_repair_failure_and_cleanup(self):
+        text = BASE.replace("local_verified", "inconclusive")
+        text = text.replace("本地编译和适用检查通过；未执行外层流水线。",
+                            "候选编译失败后已恢复；现场材料不足以确认 SDK 兼容范围，转案例建议，本轮不再实施修复。")
+        text = text.replace("缺少导入；参见 src/Example.java:2 和 MR-1 的契约说明。",
+                            "补充导入后仍缺符号；SDK 与调用方的兼容范围仍待确认。")
+        text = text.replace("当前候选仍符合依据；参见 review-1。", "候选已放弃并恢复；见 recovery-1。")
+        text = text.replace("本次补充一处导入。", "本次曾补充导入，编译失败后已恢复原始内容。")
+        text = text.replace("保留；见 diff-1", "已恢复；见 recovery-1")
+        text = text.replace("编译与清理校验已完成。", "候选编译失败；恢复与清理校验已完成。")
+        text = text.replace("| passed |", "| failed |")
+        text = text.replace("当前根目录和 candidate baseline", "当前根目录及恢复前保留的原始内容")
+        text = text.replace("当前候选绑定、match", "恢复后原始内容绑定、match")
+        text = text.replace("| digest-example |", "| digest-example；已放弃并恢复，非交付候选 |")
+        text = text.replace("宿主执行原定后续检查。", "建议先确认 SDK 兼容范围，实施前重新评估；建议尚未执行。")
+        text = text.replace("源码留在工作空间，后续脚本负责提取 Patch。", "源码已恢复，保留候选失败与清理收据。")
+        text = text.replace("## 3. 目标行为与修复依据\n", """## 3. 目标行为与修复依据
+
+| 案例源 / 案例 | 来源与读取 | 适用性 |
+| --- | --- | --- |
+| example-a / C1 | [原文](https://wiki.example.invalid/cases/C1)，v2，2026-10-16T01:00:00Z，MCP 搜索后 CLI 读全文 | 历史 SDK 版本不同；建议核对版本约束与迁移记录，尚不能确认确定修法 |
+
+""")
+        text = text.replace("## 6. 剩余问题与交接\n", """## 6. 剩余问题与交接
+
+查询目的为补充 SDK 兼容性排查方向。范围为 example-a 的已授权案例空间；
+补查别名后没有新的区分线索，停止检索。另一已绑定来源 example-b 正文读取被拒，
+未切换路径绕过，也不报告零结果；剩余兼容性缺口已列为建议前置条件。
+
+""")
+        self.assertEqual(self.errors(text), [])
+        # A case-citation table cannot satisfy the separate requirement for a
+        # declared verification table; this does not assess semantic correctness.
+        self.assertIn("required_table", self.codes(no_checks(text)))
+        self.assertIn("metadata_fields", self.codes(text.replace("| invocation_id | example-1 |\n", "")))
+
+    def test_readonly_case_advice_keeps_future_checks_separate(self):
+        text = no_changes(no_checks(BASE)).replace("| 请求类型 | 修复 |", "| 请求类型 | 仅诊断 |")
+        text = text.replace("| 执行模式 | local_verify |", "| 执行模式 | 不适用：仅诊断 |")
+        text = text.replace("example-1", "不适用：仅诊断").replace("digest-example", "不适用：未创建候选")
+        text = text.replace("local_verified", "仅诊断，转案例建议，未执行修复")
+        text = text.replace("本地编译和适用检查通过；未执行外层流水线。", "已查日志、源码及 MR，仍缺 SDK 兼容性依据；本轮只交付建议。")
+        text = text.replace("缺少导入；参见 src/Example.java:2 和 MR-1 的契约说明。", "类型缺失机制尚未确认，仍缺 SDK 版本约束。")
+        text = text.replace("补充导入，保持契约。", "建议先核对 SDK 版本与迁移说明，条件确认后再考虑调整依赖；尚未实施。")
+        text = text.replace("实际编辑前宿主记录 admission-1。", "不适用：仅诊断，不建立修复准入。")
+        text = text.replace("当前候选仍符合依据；参见 review-1。", "仅核对案例适用性，未创建候选。")
+        text = text.replace("在修复准入前结束。", "仅诊断，未改动工作空间。")
+        text = text.replace("## 6. 剩余问题与交接\n", """## 6. 剩余问题与交接
+
+案例 example-a/C1 的 v2 原文来自 https://wiki.example.invalid/cases/C1；
+历史环境不同，只提供迁移排查方向。以下均为后续建议，不是本次已声明验证计划。
+
+| 建议检查 | 适用条件 | 状态 |
+| --- | --- | --- |
+| 编译及调用方兼容测试 | SDK 版本与目标行为确认、后续明确实施时 | 建议，未执行 |
+
+""")
+        text = text.replace("宿主执行原定后续检查。", "先补充版本和目标行为依据；不自动恢复自愈。")
+        text = text.replace("源码留在工作空间，后续脚本负责提取 Patch。", "仅交付诊断与案例建议，没有候选或构建产物。")
+        self.assertEqual(self.errors(text, checks="none"), [])
+        # A future-check table must not stand in for checks actually declared for this call.
+        self.assertIn("required_table", self.codes(text, checks="present"))
+
     def test_empty_chapters_still_fail(self):
         start = BASE.index("## 3. 目标行为与修复依据\n") + len("## 3. 目标行为与修复依据\n")
         end = BASE.index("## 4. 实际修改\n")

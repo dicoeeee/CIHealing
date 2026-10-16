@@ -108,6 +108,41 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual((self.repo / "target/preexisting.txt").read_text(), "job-owned\n")
         self.assertEqual(self.audit()["dimensions"]["cleanup_evidence"]["status"], "confirmed")
         self.assertEqual(self.audit()["workspace_checks"][-1]["binding"], "confirmed")
+        self.assertNotIn("references/case-retrieval.md", [r["resource"] for r in self.audit()["resource_reads"]])
+
+    def test_case_guide_truncation_and_late_read_remain_distinct_observations(self):
+        resource = "references/case-retrieval.md"
+        self.load_resource(resource)
+        self.truncate_resource(resource)
+        incomplete_seq = self.events[-1]["seq"]
+        # Synthetic tool event only: v5 records reads, not whether a case query
+        # was warranted or its conditional pre-read gate was met.
+        self.call("case_search", {"query": "missing symbol"}, {"results": []})
+        search_seq = self.events[-1]["seq"]
+        self.load_resource(resource)
+        complete_seq = self.events[-1]["seq"]
+        reads = [r for r in self.audit("stop")["resource_reads"] if r["resource"] == resource]
+        self.assertEqual([(r["seq"], r["complete"]) for r in reads],
+                         [(incomplete_seq, False), (complete_seq, True)])
+        self.assertLess(incomplete_seq, search_seq)
+        self.assertLess(search_seq, complete_seq)
+
+    def test_case_guide_cannot_replace_current_target_behavior_gate(self):
+        self.load_resource("references/case-retrieval.md")
+        self.truncate_resource("references/repair-basis.md")
+        self.candidate_and_verified_cleanup()
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-basis.md", self.checks())
+
+    def test_case_advice_does_not_waive_cleanup_of_prior_build(self):
+        self.workspace("capture"); self.build()
+        self.load_resource("references/case-retrieval.md")
+        self.event("InvocationMessage", {"text": "新证据使兼容性判断受阻，转案例建议，本轮不再实施修复。"})
+        # Actual artifact/receipt checks, not an assertion that v5 enforces the advice branch.
+        self.assertIn("final_native_cleanup_match_unconfirmed", self.checks("stop"))
+        self.clean(); self.workspace("check")
+        self.assertEqual(self.audit("stop")["failures"], [])
+        self.assertEqual(self.audit("stop")["dimensions"]["cleanup_evidence"]["status"], "confirmed")
+        self.assertEqual((self.repo / "target/preexisting.txt").read_text(), "job-owned\n")
 
     def capture_before_and_after_candidate(self):
         self.workspace("capture", "superseded")
