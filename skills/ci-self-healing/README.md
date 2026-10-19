@@ -213,24 +213,26 @@ references/classification-profiles/<company>/<product>/
 
 ### 2. 在定制版本中固定 Profile
 
-推荐企业或个人在拿到通用版本后，先准备自己的 Profile，再修改 [SKILL.md 的“分类 Profile 绑定”区](SKILL.md#分类-profile-绑定)。通用版本的两个值均为“未配置”；定制时在原位置替换为实际标识及入口，不在其他位置重复追加声明。例如：
+推荐企业或个人在拿到通用版本后，先准备自己的 Profile，再修改 [SKILL.md 的“自定义资源绑定”区](SKILL.md#自定义资源绑定)中的分类行。分类与案例源共用“资源类型、固定 ID、接入入口”，分别选择、按各自条件加载；通用版本均为“未配置”。定制时只替换对应行，不在其他位置重复追加声明，也不覆盖另一类型的已有绑定。例如，仅固定分类时：
 
 ~~~markdown
-## 分类 Profile 绑定
+### 自定义资源绑定
 
-- 固定 Profile：my-company/my-product
-- Profile 入口：references/classification-profiles/my-company/my-product/profile.md
+| 资源类型 | 固定 ID | 接入入口 |
+| --- | --- | --- |
+| 分类 Profile | my-company/my-product | references/classification-profiles/my-company/my-product/profile.md |
+| 案例源 | 未配置 | 未配置 |
 ~~~
 
 这是发行包级的明确绑定，不是可被本次调用自动覆盖的默认值；README 中的示例本身不生效。示例路径需先创建，标识须与入口声明一致。个人可以使用自己的命名，如 `personal/native-build`，不要求存在企业或产品组织层级。
 
-定制完成后，Agent 每次使用该版本都会按绑定读取 Profile，调用者无需再提供分类说明。原有调用保持不变：
+定制完成后，Agent 在诊断分类时按绑定读取 Profile，调用者无需再提供分类说明。原有调用保持不变：
 
 ~~~text
 /ci-self-healing "/path/to/failure-scene" "/path/to/healing-output"
 ~~~
 
-仅当发行包**没有固定绑定**时，才可由明确请求或可信启动配置选择本次 Profile，例如：
+仅当发行包**没有固定分类 Profile**时，才可由明确请求或可信启动配置选择本次 Profile；案例源是否固定不影响这一选择。例如：
 
 ~~~text
 使用 $ci-self-healing 修复本次构建失败。
@@ -240,11 +242,11 @@ output_dir: /path/to/healing-output
 Profile 入口：references/classification-profiles/<company>/<product>/profile.md
 ~~~
 
-启动器注入是可选方式，不是定制版本的必需步骤。上述分类说明属于可信任务上下文，不新增 CLI 参数、配置文件解析器或机器协议。固定绑定同样适用于仅诊断和其他修复调用，不依赖两个目录参数是否提供。
+启动器注入是可选方式，不是定制版本的必需步骤。本次选择提供资源类型、ID 和入口即可，沿用上述命名文本，无需改成表格；固定声明也只是 Markdown 约定，不新增 CLI 参数、配置文件解析器或机器协议。固定分类同样适用于仅诊断和其他修复调用，不依赖两个目录参数是否提供。
 
 入口相对路径以 **Skill 根目录** 解析，包内链接以所在文件为基准，不是相对于 `work_dir`。发行包只需携带实际使用的标准；放入文件不会自动启用。每个调查对象使用一份 Profile，多产品选择不自动合并。
 
-固定绑定冲突或失效时，Agent 会披露缺口而不是自动换标准；维护者需要更换时，更新唯一绑定区。来源权限、适用性和冲突处理统一见[选择标准与绑定对象](references/failure-classification.md#选择标准与绑定对象)，这些缺口不一律阻止通用取证。
+固定绑定冲突或失效时，Agent 会披露缺口而不是自动换标准；维护者需要更换时，更新唯一绑定区。共同的选择、冲突和路径规则见该绑定区；分类适用性与缺口处理见[选择标准与绑定对象](references/failure-classification.md#选择标准与绑定对象)，这些缺口不一律阻止通用取证。
 
 ### 3. 允许定制什么
 
@@ -340,16 +342,20 @@ Provider 填“不限”或具体 ID，按需补充主机/项目/流水线范围
 
 历史案例用于诊断或修复受阻后的建议交付。通用规则由[案例检索](references/case-retrieval.md)维护，企业只提供自己的来源与 MCP/CLI 接入说明；两种路径可单独使用或互补。案例源与 CI Provider、分类 Profile、企业修复策略分别绑定，接入不会增加位置参数、检索服务、配置解析器或自动入库流程。
 
-先创建实际使用的接入文件，例如 `references/case-sources/company-ci.md`，再将指南中的“未配置固定案例源”替换为固定声明。以下为维护示例，本身不启用来源：
+先创建实际使用的接入文件，例如 `references/case-sources/company-ci.md`，再替换 [SKILL.md 唯一绑定区](SKILL.md#自定义资源绑定)中的案例源行；多个固定来源各列一行，保留分类行的已有值。以下为仅固定案例源的维护示例，本身不启用来源：
 
 ~~~markdown
-本发行包固定使用以下案例源：
+### 自定义资源绑定
 
-- 案例源 ID：company/ci-cases
-  接入入口：references/case-sources/company-ci.md
+| 资源类型 | 固定 ID | 接入入口 |
+| --- | --- | --- |
+| 分类 Profile | 未配置 | 未配置 |
+| 案例源 | company/ci-cases | references/case-sources/company-ci.md |
 ~~~
 
-未固定时，明确请求或可信宿主也可用上述命名文本指定本次来源；接入入口以 Skill 根目录解析。固定绑定不会被本次调用静默覆盖，多个来源只分发实际使用的说明；范围、冲突与不可用分支以[来源绑定](references/case-retrieval.md#来源绑定)为准。
+未固定案例源时，明确请求或可信宿主可用“本次案例源 ID：company/ci-cases；接入入口：references/case-sources/company-ci.md”指定本次来源，分类是否固定不影响这一选择；无需固定输入格式。入口路径与冲突按唯一绑定区处理，实例核对、多源范围和不可用分支见[来源绑定](references/case-retrieval.md#来源绑定)。看到声明只记录配置，尚未转入案例建议分支时不加载接入说明、探测工具或查询。
+
+旧定制发行包升级时，将原案例指南中的实际固定声明迁入唯一绑定区，并移除旧声明；分类原有固定标识与入口也原样迁入。入口文件无需搬移，既有 ID 与路径不变，不保留两处可生效的固定配置。
 
 企业接入说明可以使用下列骨架，替换实际值，删除不存在的路径和能力；凭据留在宿主，不写入文件：
 

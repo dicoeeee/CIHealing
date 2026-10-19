@@ -182,6 +182,40 @@ class PacketTests(unittest.TestCase):
             for c in clauses:
                 self.assertEqual(c["text"], "".join(body.splitlines(keepends=True)[c["start_line"] - 1:c["end_line"]]))
 
+    def test_fixed_bindings_remain_in_current_projection_without_changing_evidence(self):
+        body = read_regular(Path(__file__).resolve().parents[3] / "skills/ci-self-healing/SKILL.md").decode()
+        start = body.index("### 自定义资源绑定\n")
+        end = body.index("\n## ", start)
+        declaration = body[start:end]
+        profile = "| 分类 Profile | 未配置 | 未配置 |"
+        cases = "| 案例源 | 未配置 | 未配置 |"
+        self.assertEqual(declaration.count(profile), 1)
+        self.assertEqual(declaration.count(cases), 1)
+        configured_profile = "| 分类 Profile | example/build | references/profiles/build.md |"
+        configured_cases = ("| 案例源 | example/wiki | references/cases/wiki.md |\n"
+                            "| 案例源 | example/tickets | references/cases/tickets.md |")
+        for fixed_profile, fixed_cases in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(profile=fixed_profile, cases=fixed_cases):
+                binding = declaration.replace(profile, configured_profile if fixed_profile else profile)
+                binding = binding.replace(cases, configured_cases if fixed_cases else cases)
+                p = self.packet("SKILL.md")
+                p["events"][0]["payload"]["tool_name"] = "load_skill"
+                p["events"][0]["payload"]["args"] = {"skill_name": "ci-self-healing"}
+                p["events"][1]["payload"]["result"] = body[:start] + binding + body[end:]
+                p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
+                before = copy.deepcopy(p)
+                q = project_packet(p)
+                clauses = q["events"][1]["payload"]["result"]["verbatim_clauses"]
+                self.assertTrue(any(binding in c["text"] for c in clauses))
+                self.assertEqual(p, before)
+                self.assertEqual(q["events"][2:], p["events"][2:])
+                self.assertEqual(q["files"], p["files"])
+                # A partial Skill read stays raw; projection must not manufacture
+                # a complete declaration or claim that binding means case access.
+                p["events"][1]["payload"]["result"] = body[:start] + binding[:len(binding) // 2]
+                p["deterministic"]["execution_checks"]["resource_reads"][0]["complete"] = False
+                self.assertEqual(project_packet(p)["events"], p["events"])
+
     def test_fenced_fake_heading_does_not_end_real_clause(self):
         text = "## Real\n```text\n## Fake\n```\nimportant\n## Next\n"
         self.assertIn("important", sections(text, ["Real"])[0]["text"])
