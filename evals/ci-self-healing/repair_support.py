@@ -14,8 +14,11 @@ LEGACY_EXECUTION_CONTRACT = "skill-execution-v1"
 RECOVERY_EXECUTION_CONTRACT = "skill-execution-v2"
 SPLIT_EXECUTION_CONTRACT = "skill-execution-v3"
 POLICY_EXECUTION_CONTRACT = "skill-execution-v4"
-EXECUTION_CONTRACT = "skill-execution-v5"
-POLICY_EXECUTION_CONTRACTS = {POLICY_EXECUTION_CONTRACT, EXECUTION_CONTRACT}
+INPUT_EXECUTION_CONTRACT = "skill-execution-v5"
+EXECUTION_CONTRACT = "skill-execution-v6"
+INPUT_EXECUTION_CONTRACTS = {INPUT_EXECUTION_CONTRACT, EXECUTION_CONTRACT}
+POLICY_EXECUTION_CONTRACTS = {POLICY_EXECUTION_CONTRACT, *INPUT_EXECUTION_CONTRACTS}
+SEPARATE_BASIS_EXECUTION_CONTRACTS = {SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT}
 SPLIT_EXECUTION_CONTRACTS = {SPLIT_EXECUTION_CONTRACT, *POLICY_EXECUTION_CONTRACTS}
 RECOVERY_EXECUTION_CONTRACTS = {RECOVERY_EXECUTION_CONTRACT, *SPLIT_EXECUTION_CONTRACTS}
 EXECUTION_CONTRACTS = {LEGACY_EXECUTION_CONTRACT, *RECOVERY_EXECUTION_CONTRACTS}
@@ -34,7 +37,8 @@ def execution_contract(skill):
     skill = Path(skill)
     declaration = skill / "assets/execution-resources.json"
     if not declaration.exists() and not declaration.is_symlink():
-        if "references/repair-basis.md" in read_regular(skill / "SKILL.md").decode():
+        entry = read_regular(skill / "SKILL.md").decode()
+        if any(name in entry for name in ("references/repair-basis.md", "references/candidate-verification.md")):
             raise EvalError("split Skill resource declaration missing")
         return RECOVERY_EXECUTION_CONTRACT
     value = read_json(declaration)

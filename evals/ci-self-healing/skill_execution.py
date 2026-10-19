@@ -11,7 +11,8 @@ import shlex
 
 from common import EvalError, digest, json_bytes, read_json, read_regular
 from repair_support import (EXECUTION_CONTRACT, EXECUTION_CONTRACTS, RECOVERY_EXECUTION_CONTRACTS, SPLIT_EXECUTION_CONTRACTS,
-                            POLICY_EXECUTION_CONTRACTS, SKILL_NAME, execution_contract, source_state)
+                            POLICY_EXECUTION_CONTRACTS, INPUT_EXECUTION_CONTRACTS, SEPARATE_BASIS_EXECUTION_CONTRACTS,
+                            SKILL_NAME, execution_contract, source_state)
 
 
 RECOVERABLE_CAPTURE_CHECKS = {"build_without_confirmed_native_capture", "capture_not_current_at_build"}
@@ -167,7 +168,7 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
     if contract in SPLIT_EXECUTION_CONTRACTS and execution_contract(skill) != contract:
         raise EvalError("Skill package does not declare the split resource layout")
     candidate_resources = ("references/diagnosis-and-repair.md", "references/repair-and-verification.md")
-    if contract in SPLIT_EXECUTION_CONTRACTS:
+    if contract in SEPARATE_BASIS_EXECUTION_CONTRACTS:
         candidate_resources += ("references/repair-basis.md",)
     if contract in POLICY_EXECUTION_CONTRACTS:
         candidate_resources += ("references/enterprise-policy.md",)
@@ -214,7 +215,7 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
         if kind == "InvocationToolCallStart":
             calls[p.get("call_id")] = event
             name, args = p.get("tool_name"), p.get("args", {})
-            if contract == EXECUTION_CONTRACT and uses_trial_workspace(
+            if contract in INPUT_EXECUTION_CONTRACTS and uses_trial_workspace(
                     p, trial / "visible" if backend == "native" else "/trial"):
                 require(("references/invocation-inputs.md",), seq)
             if name in {"read_skill_resource", "run_skill_script"} and args.get("skill_name") == SKILL_NAME and not loaded:
@@ -375,11 +376,15 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
             "; v4 policy full-read gate covers observed Java source mutations and detected builds; "
             "candidate-verification full-read gate covers detected builds; candidate intent, policy applicability, "
             "failure/collaboration branch selection and opaque writes require semantic review; posthoc audit, not preventive enforcement")
-    if contract == EXECUTION_CONTRACT:
+    if contract in INPUT_EXECUTION_CONTRACTS:
         result["coverage"] += (
             "; v5 invocation-inputs full-read gate covers file/search tools, literal trial-root shell access, "
             "detected builds and non-help Skill scripts; input interpretation, core-contract applicability, "
             "stop sufficiency and unnecessary resource reads require semantic review; no reasoning-text inspection")
+    if contract == EXECUTION_CONTRACT:
+        result["coverage"] += (
+            "; v6 repair basis is included in the repair-and-verification full-read gate; "
+            "historical v3/v4/v5 retain their separate repair-basis gate")
     if contract in RECOVERY_EXECUTION_CONTRACTS:
         result["dimensions"]["process_compliance"] = {
             "status": "violations_observed" if result["violations"] else "no_observed_violation",

@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import EvalError, read_regular
 from review_packet import project_packet, sections
-from repair_support import EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT
+from repair_support import EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT
 
 
 def expand(value, pool):
@@ -86,7 +86,7 @@ class PacketTests(unittest.TestCase):
 
     def test_split_guides_preserve_their_own_verbatim_semantic_clauses(self):
         skill = Path(__file__).resolve().parents[3] / "skills/ci-self-healing"
-        for resource in ("references/diagnosis-and-repair.md", "references/repair-basis.md", "references/workspace-recovery.md",
+        for resource in ("references/diagnosis-and-repair.md", "references/workspace-recovery.md",
                          "references/candidate-verification.md", "references/verification-failures.md", "references/collaboration.md",
                          "references/enterprise-policy.md", "references/repair-and-verification.md", "references/execution-modes.md"):
             with self.subTest(resource=resource):
@@ -101,17 +101,32 @@ class PacketTests(unittest.TestCase):
                     lines = body.splitlines(keepends=True)
                     self.assertEqual(clause["text"], "".join(lines[clause["start_line"] - 1:clause["end_line"]]))
                 self.assertEqual(q["events"][2:], p["events"][2:])
-                if resource.endswith("repair-basis.md"):
+                if resource.endswith("repair-and-verification.md"):
                     self.assertIn("语义方向歧义", [c["heading"] for c in clauses])
                 if resource.endswith("workspace-recovery.md"):
                     self.assertIn("基准缺失或时序错误的恢复", [c["heading"] for c in clauses])
 
-    def test_missing_split_semantic_clause_is_not_silently_projected_away(self):
-        p = self.packet("references/repair-basis.md")
+    def test_missing_merged_semantic_clause_is_not_silently_projected_away(self):
+        p = self.packet("references/repair-and-verification.md")
         p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
         p["events"][1]["payload"]["result"] = "# Missing basis\n"
         with self.assertRaisesRegex(EvalError, "clause missing"):
             project_packet(p)
+
+    def test_historical_split_basis_projection_is_unchanged(self):
+        headings = ["目标行为与证据", "选择修复位置", "重要反证", "语义方向歧义", "完整候选与缺口"]
+        p = self.packet("references/repair-basis.md")
+        body = "".join("## " + title + "\noriginal frozen clause " + str(i) + "\n"
+                       for i, title in enumerate(headings))
+        p["events"][1]["payload"]["result"] = body
+        for contract in (SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT):
+            with self.subTest(contract=contract):
+                p["deterministic"]["execution_checks"]["contract"] = contract
+                clauses = project_packet(p)["events"][1]["payload"]["result"]["verbatim_clauses"]
+                self.assertEqual([c["heading"] for c in clauses], headings)
+                self.assertEqual("".join(c["text"] for c in clauses), body)
+        p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
+        self.assertEqual(project_packet(p)["events"], p["events"])
 
     def test_v4_policy_statement_and_prohibitions_are_verbatim_and_not_fabricated(self):
         resource = "references/enterprise-policy.md"
@@ -145,11 +160,12 @@ class PacketTests(unittest.TestCase):
         from review import build_prompt, schema
         p = self.packet()
         original_schema = schema()
-        for contract in (SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, EXECUTION_CONTRACT):
+        for contract in (SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, EXECUTION_CONTRACT):
             p["deterministic"]["execution_checks"]["contract"] = contract
             prompt = build_prompt(p)
             self.assertEqual("当前 v4 准入评审" in prompt, contract == POLICY_EXECUTION_CONTRACT)
-            self.assertEqual("当前 v5 准入评审" in prompt, contract == EXECUTION_CONTRACT)
+            self.assertEqual("当前 v5 准入评审" in prompt, contract == INPUT_EXECUTION_CONTRACT)
+            self.assertEqual("当前 v6 准入评审" in prompt, contract == EXECUTION_CONTRACT)
         self.assertEqual(schema(), original_schema)
 
     def test_v5_projects_input_and_stop_routes_without_changing_v4_projection(self):
@@ -158,6 +174,7 @@ class PacketTests(unittest.TestCase):
         body = read_regular(Path(__file__).resolve().parents[3] / "skills/ci-self-healing/SKILL.md").decode()
         p["events"][1]["payload"]["result"] = body
         for contract, headings in ((POLICY_EXECUTION_CONTRACT, ["3. 判断修复准入", "保持硬边界"]),
+                                   (INPUT_EXECUTION_CONTRACT, ["1. 确认任务与现场", "3. 判断修复准入", "保持硬边界"]),
                                    (EXECUTION_CONTRACT, ["1. 确认任务与现场", "3. 判断修复准入", "保持硬边界"])):
             p["deterministic"]["execution_checks"]["contract"] = contract
             clauses = project_packet(p)["events"][1]["payload"]["result"]["verbatim_clauses"]

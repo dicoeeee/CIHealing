@@ -10,7 +10,7 @@ import json
 from collections import Counter
 
 from common import EvalError, digest, json_bytes
-from repair_support import EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT
+from repair_support import EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT
 
 
 FORMAT = "ci-review-projection-v2"
@@ -57,6 +57,16 @@ INPUT_SECTIONS = {
     "SKILL.md": ["1. 确认任务与现场", "3. 判断修复准入", "保持硬边界"],
 }
 
+# v6 moves the same semantic clauses into the admission guide. Historical maps
+# remain unchanged and are selected from the packet's own execution contract.
+MERGED_SECTIONS = {
+    name: headings for name, headings in INPUT_SECTIONS.items() if name != "references/repair-basis.md"
+}
+MERGED_SECTIONS["references/repair-and-verification.md"] = [
+    "修复依据", *SPLIT_SECTIONS["references/repair-basis.md"],
+    "候选修改前的准入记录", "决定修复准入", "结果判定",
+]
+
 
 def sections(text, wanted):
     lines = text.splitlines(keepends=True)
@@ -87,7 +97,8 @@ def project_packet(packet, trial_prefix=None):
     execution = packet.get("deterministic", {}).get("execution_checks", {})
     section_map = {SPLIT_EXECUTION_CONTRACT: SPLIT_SECTIONS,
                    POLICY_EXECUTION_CONTRACT: POLICY_SECTIONS,
-                   EXECUTION_CONTRACT: INPUT_SECTIONS}.get(execution.get("contract"), SECTIONS)
+                   INPUT_EXECUTION_CONTRACT: INPUT_SECTIONS,
+                   EXECUTION_CONTRACT: MERGED_SECTIONS}.get(execution.get("contract"), SECTIONS)
     confirmed = {(r["seq"], r["resource"]) for r in execution.get("resource_reads", []) if r.get("complete") is True}
     projection = []
     for event in value["events"]:

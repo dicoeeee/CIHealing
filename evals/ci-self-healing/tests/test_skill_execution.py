@@ -9,7 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from common import EvalError, changes, digest, json_bytes, read_regular, snapshot, write_new
-from repair_support import (EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT, RECOVERY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT,
+from repair_support import (EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT, RECOVERY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT,
                             execution_contract, source_state)
 from skill_execution import audit_execution, is_build, workspace_result
 
@@ -32,13 +32,14 @@ class SkillExecutionTests(unittest.TestCase):
         self.events = []
         self.previous = snapshot(self.visible)
         write_new(self.skill / "assets/execution-resources.json", read_regular(SKILL / "assets/execution-resources.json"))
-        for name in ("SKILL.md", "references/invocation-inputs.md", "references/diagnosis-and-repair.md", "references/repair-basis.md",
+        for name in ("SKILL.md", "references/invocation-inputs.md", "references/diagnosis-and-repair.md",
                      "references/repair-and-verification.md", "references/enterprise-policy.md",
                      "references/candidate-verification.md", "references/workspace-cleanup.md"):
             self.load_resource(name)
 
-    def load_resource(self, name):
-        data = read_regular(SKILL / name)
+    def load_resource(self, name, data=None):
+        if data is None:
+            data = read_regular(SKILL / name)
         if not (self.skill / name).exists():
             write_new(self.skill / name, data)
         tool = "load_skill" if name == "SKILL.md" else "read_skill_resource"
@@ -46,6 +47,14 @@ class SkillExecutionTests(unittest.TestCase):
         if tool != "load_skill":
             args["resource_name"] = name
         self.call(tool, args, data.decode())
+
+    def historical_layout(self, contract):
+        declaration = self.skill / "assets/execution-resources.json"
+        value = json.loads(declaration.read_text()); value["contract"] = contract
+        declaration.write_text(json.dumps(value))
+        # Synthetic frozen bytes for the path/full-read protocol only. Original
+        # historical guide clauses are covered separately by projection/replay.
+        self.load_resource("references/repair-basis.md", b"# Frozen separate repair basis\nlegacy gate fixture\n")
 
     def truncate_resource(self, resource):
         for i, event in enumerate(self.events):
@@ -115,7 +124,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.load_resource(resource)
         self.truncate_resource(resource)
         incomplete_seq = self.events[-1]["seq"]
-        # Synthetic tool event only: v5 records reads, not whether a case query
+        # Synthetic tool event only: the audit records reads, not whether a case query
         # was warranted or its conditional pre-read gate was met.
         self.call("case_search", {"query": "missing symbol"}, {"results": []})
         search_seq = self.events[-1]["seq"]
@@ -129,15 +138,15 @@ class SkillExecutionTests(unittest.TestCase):
 
     def test_case_guide_cannot_replace_current_target_behavior_gate(self):
         self.load_resource("references/case-retrieval.md")
-        self.truncate_resource("references/repair-basis.md")
+        self.truncate_resource("references/repair-and-verification.md")
         self.candidate_and_verified_cleanup()
-        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-basis.md", self.checks())
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-and-verification.md", self.checks())
 
     def test_case_advice_does_not_waive_cleanup_of_prior_build(self):
         self.workspace("capture"); self.build()
         self.load_resource("references/case-retrieval.md")
         self.event("InvocationMessage", {"text": "新证据使兼容性判断受阻，转案例建议，本轮不再实施修复。"})
-        # Actual artifact/receipt checks, not an assertion that v5 enforces the advice branch.
+        # Actual artifact/receipt checks, not an assertion that the audit enforces the advice branch.
         self.assertIn("final_native_cleanup_match_unconfirmed", self.checks("stop"))
         self.clean(); self.workspace("check")
         self.assertEqual(self.audit("stop")["failures"], [])
@@ -350,6 +359,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertNotIn("recoveries", result)
 
     def test_v2_keeps_its_original_resource_and_recovery_requirements(self):
+        self.historical_layout(SPLIT_EXECUTION_CONTRACT)
         self.late_candidate(); self.complete_recovery()
         self.truncate_resource("references/repair-basis.md")
         self.truncate_resource("references/workspace-recovery.md")
@@ -357,19 +367,48 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual(result["failures"], [])
         self.assertEqual(len(result["recoveries"]), 1)
 
+    def test_historical_v3_v4_v5_still_require_separate_basis(self):
+        self.historical_layout(SPLIT_EXECUTION_CONTRACT)
+        self.truncate_resource("references/repair-basis.md")
+        self.candidate_and_verified_cleanup()
+        for contract in (SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT):
+            with self.subTest(contract=contract):
+                self.historical_layout(contract)  # Late complete read does not erase the violation.
+                checks = [f["check"] for f in self.audit(contract=contract)["failures"]]
+                self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-basis.md", checks)
+
+    def test_historical_v5_retains_input_gate(self):
+        self.historical_layout(INPUT_EXECUTION_CONTRACT)
+        self.truncate_resource("references/invocation-inputs.md")
+        self.call("read_file", {"path": "Example.java"}, "class Example {}")
+        result = self.audit("stop", contract=INPUT_EXECUTION_CONTRACT)
+        self.assertIn(self.input_check(), [f["check"] for f in result["failures"]])
+        self.load_resource("references/invocation-inputs.md")
+        self.assertEqual(self.audit("stop", contract=INPUT_EXECUTION_CONTRACT)["failures"], result["failures"])
+
+    def test_admission_tail_without_merged_basis_is_an_incomplete_read(self):
+        resource = "references/repair-and-verification.md"
+        body = read_regular(SKILL / resource).decode()
+        tail = body[body.index("## 候选修改前的准入记录"):]
+        for event in self.events:
+            if event["kind"] == "InvocationToolCallResult" and event["payload"].get("result") == body:
+                event["payload"]["result"] = tail
+        self.candidate_and_verified_cleanup()
+        self.assertIn("required_skill_resource_not_loaded_before_action:" + resource, self.checks())
+
     def test_normal_build_does_not_require_recovery_resource(self):
         self.workspace("capture"); self.build(); self.clean(); self.workspace("check")
         result = self.audit()
         self.assertEqual(result["failures"], [])
         self.assertNotIn("references/workspace-recovery.md", [r["resource"] for r in result["resource_reads"]])
 
-    def test_candidate_write_requires_complete_split_basis_before_action(self):
-        self.truncate_resource("references/repair-basis.md")
+    def test_candidate_write_requires_complete_merged_guide_before_action(self):
+        self.truncate_resource("references/repair-and-verification.md")
         self.call("edit_file", {"path": "Example.java"}, "done",
                   lambda: (self.repo / "src/main/java/Example.java").write_text("class Changed {}"))
-        self.load_resource("references/repair-basis.md")  # A late read cannot repair the earlier gate.
+        self.load_resource("references/repair-and-verification.md")  # A late read cannot repair the earlier gate.
         self.workspace("capture"); self.build(); self.clean(); self.workspace("check")
-        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-basis.md", self.checks())
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-and-verification.md", self.checks())
 
     def candidate_and_verified_cleanup(self):
         self.call("edit_file", {"path": "Example.java"}, "done",
@@ -402,17 +441,14 @@ class SkillExecutionTests(unittest.TestCase):
 
     def test_v3_keeps_historical_policy_read_coverage(self):
         self.truncate_resource("references/enterprise-policy.md")
-        declaration = self.skill / "assets/execution-resources.json"
-        value = json.loads(declaration.read_text())
-        value["contract"] = SPLIT_EXECUTION_CONTRACT
-        declaration.write_text(json.dumps(value))
+        self.historical_layout(SPLIT_EXECUTION_CONTRACT)
         self.candidate_and_verified_cleanup()
         self.assertEqual(execution_contract(self.skill), SPLIT_EXECUTION_CONTRACT)
         self.assertEqual(self.audit(contract=SPLIT_EXECUTION_CONTRACT)["failures"], [])
 
     def test_specialist_and_basis_do_not_replace_common_diagnosis_read(self):
         self.events = []
-        for name in ("SKILL.md", "references/invocation-inputs.md", "references/java-maven-compilation.md", "references/repair-basis.md",
+        for name in ("SKILL.md", "references/invocation-inputs.md", "references/java-maven-compilation.md",
                      "references/repair-and-verification.md", "references/enterprise-policy.md",
                      "references/candidate-verification.md", "references/workspace-cleanup.md"):
             self.load_resource(name)
@@ -452,7 +488,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual(result["recoveries"], [])
 
     def test_stop_does_not_require_candidate_or_cleanup_branch_reads(self):
-        for resource in ("references/repair-basis.md", "references/repair-and-verification.md", "references/enterprise-policy.md",
+        for resource in ("references/repair-and-verification.md", "references/enterprise-policy.md",
                          "references/candidate-verification.md", "references/workspace-cleanup.md"):
             self.truncate_resource(resource)
         self.assertEqual(self.audit("stop")["failures"], [])
@@ -509,9 +545,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual([f["check"] for f in self.audit("stop")["failures"]], [self.input_check()] * 2)
 
     def test_v4_does_not_gain_new_input_gate_and_retains_policy_gate(self):
-        declaration = self.skill / "assets/execution-resources.json"
-        value = json.loads(declaration.read_text()); value["contract"] = POLICY_EXECUTION_CONTRACT
-        declaration.write_text(json.dumps(value))
+        self.historical_layout(POLICY_EXECUTION_CONTRACT)
         self.truncate_resource("references/invocation-inputs.md")
         self.candidate_and_verified_cleanup()
         self.assertEqual(self.audit(contract=POLICY_EXECUTION_CONTRACT)["failures"], [])

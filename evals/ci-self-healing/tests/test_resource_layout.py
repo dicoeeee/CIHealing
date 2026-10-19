@@ -7,7 +7,7 @@ from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import read_regular
-from review_packet import INPUT_SECTIONS, sections
+from review_packet import MERGED_SECTIONS, sections
 from suite import REPO, skill_from_dir
 
 
@@ -53,7 +53,7 @@ class ResourceLayoutTests(unittest.TestCase):
 
     def test_current_review_projection_can_extract_every_declared_clause(self):
         files = skill_from_dir(REPO / "skills/ci-self-healing")
-        for name, wanted in INPUT_SECTIONS.items():
+        for name, wanted in MERGED_SECTIONS.items():
             with self.subTest(resource=name):
                 self.assertIn(name, files)
                 self.assertEqual([c["heading"] for c in sections(files[name].decode(), wanted)], wanted)

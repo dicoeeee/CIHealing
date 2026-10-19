@@ -8,7 +8,7 @@ from cases import CASES
 from common import EvalError, digest, json_bytes, read_json, read_regular, run_logged, write_json, write_new
 from grading import CRITERIA, validate_grade_binding
 from review_limits import DEFAULT_PACKET_BYTES, LEGACY_PACKET_BYTES, check_packet, encode_envelope, encode_request, input_limits
-from repair_support import ADMISSION_CHANNEL_CONTRACT, EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACTS
+from repair_support import ADMISSION_CHANNEL_CONTRACT, EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACTS
 from suite import load_suite, select_trials
 
 
@@ -91,7 +91,7 @@ def message_channel_sequences(packet):
 
 def build_prompt(packet):
     contract = packet.get("deterministic", {}).get("execution_checks", {}).get("contract")
-    version = "v5" if contract == EXECUTION_CONTRACT else "v4"
+    version = {INPUT_EXECUTION_CONTRACT: "v5", EXECUTION_CONTRACT: "v6"}.get(contract, "v4")
     policy_notice = (f"\n当前 {version} 准入评审：在 admission_and_experiments 项核对企业策略的实际入口、完整读取、"
                      "声明和对动作的处置；明确未配置不同于未读、缺失或不可读。命中禁令应停止，"
                      "影响动作的策略缺口不能按未命中放行。确定性读取审计不证明策略适用性或语义准入成立。"

@@ -385,7 +385,7 @@ MCP 参数以实际 Schema 为准，CLI 语法以当前版本帮助为准；帮�
 
 接入验收使用脱敏样例，分别检查：MCP 单路径、CLI 单路径和同源补齐；跨企业/实例身份混淆与绑定冲突；普通修复跳过案例、信息不足时在修改前转建议、修复受阻后转建议、进入后已知案例直接读取；别名、过窄筛选、分页/正文截断、重复候选与重要反证；权限拒绝不绕过、预算耗尽与无有效新线索收束；命中/协作补充不恢复自愈、只读不建修复身份、已有修改仍恢复清理。未配置、未查询、无结果、不可访问和内容不完整应有不同说明。真实案例源尚未提供时不宣称已接入。
 
-离线验证覆盖包内引用、读取完整性、评审证据保留和六章报告兼容性；当前 v5 审计可记录案例资源的完整读取，案例指南走评审的未映射资源全文保留路径，已有审计 Schema 和历史摘录映射不变。它不自动判定是否受阻、应否检索、建议分支是否被遵守、适用性比较是否正确或条件读取时序是否合规，这些仍需轨迹与语义评审；事后补读不能追认先前的使用。不要以离线通过宣称模型行为、工具权限或召回率已验证。
+离线验证覆盖包内引用、读取完整性、评审证据保留和六章报告兼容性；当前 v6 审计可记录案例资源的完整读取，案例指南走评审的未映射资源全文保留路径，已有审计 Schema 和历史摘录映射不变。它不自动判定是否受阻、应否检索、建议分支是否被遵守、适用性比较是否正确或条件读取时序是否合规，这些仍需轨迹与语义评审；事后补读不能追认先前的使用。不要以离线通过宣称模型行为、工具权限或召回率已验证。
 
 召回评测另用固定失败样本与人工标注案例，查询仅使用当时已知信息，可检索案例限当时已存在且有权访问的资料。按案例 ID 去重，对比现有查询基线与互补查询/补查，分别报告已标注集合的召回、有效命中、查询成本和错误引用；区分未索引、未匹配、过滤、截断与未选中等漏检原因。
 
@@ -464,7 +464,6 @@ python3 -B -m unittest discover -s tests -v
 - [SKILL.md](SKILL.md)：Agent 执行入口和硬边界。
 - [references/diagnosis-and-repair.md](references/diagnosis-and-repair.md)：只读与修复共用的失败合同、上下文取证、机制判断和停止规则。
 - [references/case-retrieval.md](references/case-retrieval.md)：受阻后按需选择案例源、MCP/CLI 访问、查询补查、适用性和建议交付；企业接入模板见上文。
-- [references/repair-basis.md](references/repair-basis.md)：修复准入前读取的目标行为、位置取舍、反证、语义歧义与完整候选缺口判据。
 - [references/failure-classification.md](references/failure-classification.md)：可信 Profile 的分类执行、证据判定、修正和修复边界；企业维护模板见上方自定义指导。
 - [references/failure-evidence-extraction.md](references/failure-evidence-extraction.md)：分类与诊断共用的按需日志检索、补读与引用规则。
 - [references/log-evidence-tool.md](references/log-evidence-tool.md)：仅选择 Python 辅助工具时读取的操作、输出和预算说明。
@@ -474,7 +473,7 @@ python3 -B -m unittest discover -s tests -v
 - [references/workspace-recovery.md](references/workspace-recovery.md)：漏采/误采恢复、候选撤销和状态文件异常，仅在对应分支读取。
 - [scripts/workspace_check.py](scripts/workspace_check.py)：只读工作空间 `capture/check` 工具，不编译、不清理、不恢复。
 - [tests/test_workspace_check.py](tests/test_workspace_check.py)：合成工作空间、文件保护与 CLI 校验测试。
-- [references/repair-and-verification.md](references/repair-and-verification.md)：准入决定、验证计划要求和结果判定。
+- [references/repair-and-verification.md](references/repair-and-verification.md)：目标行为、位置、反证和语义歧义核查，以及准入决定、验证计划要求和结果判定。
 - [references/candidate-verification.md](references/candidate-verification.md)：获准候选实施及分层验证；候选修改或构建/验证前读取。
 - [references/verification-failures.md](references/verification-failures.md)：取证工具、实验或候选验证实际失败后的处理。
 - [references/enterprise-policy.md](references/enterprise-policy.md)：企业附加策略的固定入口、适用范围核对、禁修与审批边界；通用发行包默认未配置。
@@ -482,7 +481,7 @@ python3 -B -m unittest discover -s tests -v
 - [references/collaboration.md](references/collaboration.md)：需要澄清、审批或移交时读取的协作规则；不新增通信权限。
 - [references/output-delivery.md](references/output-delivery.md)：报告目录、同名文件保护、工作空间布局与文件交付降级。
 - [references/result-report.md](references/result-report.md)：最终报告填写、条件裁剪和交付校验；模板及六章格式保持不变。
-- [assets/execution-resources.json](assets/execution-resources.json)：宿主执行审计的资源布局声明，不作为 Agent 的额外必读资源。当前布局使用 v5，补充参数指南在现场/输出动作前的完整读取审计；已声明 v3/v4 的旧包保持原版本，更早的无声明旧包按 v2 选择，新布局缺少声明或必要资源会拒绝审计，不以旧要求降级。历史记录仍使用自身声明的合同。
+- [assets/execution-resources.json](assets/execution-resources.json)：宿主执行审计的资源布局声明，不作为 Agent 的额外必读资源。当前布局使用 v6，将目标行为、反证和语义歧义判据合入准入指南，保留 v5 的参数读取门槛；已声明 v3/v4/v5 的旧包保持原版本，更早的无声明旧包按 v2 选择，新布局缺少声明或必要资源会拒绝审计，不以旧要求降级。历史记录仍使用自身声明的合同。
 - [references/provider-contract.md](references/provider-contract.md)：CI Provider 能力与证据边界。
 - [references/providers/provider-access.md](references/providers/provider-access.md)：Provider 选择与权限、本地/MCP/CLI 访问和证据交回规则。
 - [references/providers/github-actions.md](references/providers/github-actions.md)：GitHub Actions 的身份核对与只读接入示例。
@@ -497,8 +496,7 @@ python3 -B -m unittest discover -s tests -v
 | --- | --- | --- |
 | 失败绑定、主动取证与停止取证 | `references/diagnosis-and-repair.md` | 只读或修复诊断 |
 | 历史案例来源、访问、查询与建议 | `references/case-retrieval.md` 与已绑定的企业接入说明 | 诊断/修复受阻并转案例建议后、选择来源及访问/使用前 |
-| 目标行为、语义分歧与完整候选缺口 | `references/repair-basis.md` | 写入式实验或候选准入评估前 |
-| 准入决定、验证计划与结果判定 | `references/repair-and-verification.md` | 修复分支的相关动作前 |
+| 修复依据、准入决定、验证计划与结果判定 | `references/repair-and-verification.md` | 修复分支的相关动作前 |
 | 企业策略声明与限制处置 | `references/enterprise-policy.md` | 写入式实验、候选修改或验证前 |
 | 候选实施与分层验证 | `references/candidate-verification.md` | 候选修改或构建/验证前；只读停止跳过 |
 | 失败后的路径选择 | `references/verification-failures.md` | 实际取证工具/实验/候选验证失败后，选择下一动作前 |
