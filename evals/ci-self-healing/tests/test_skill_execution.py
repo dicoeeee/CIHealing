@@ -142,10 +142,39 @@ class SkillExecutionTests(unittest.TestCase):
         self.candidate_and_verified_cleanup()
         self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-and-verification.md", self.checks())
 
+    def test_case_capability_failure_without_writes_needs_no_repair_resources(self):
+        # Synthetic metadata-only calls; this checks resource/side-effect audit,
+        # not whether a model correctly decides to stay outside the advice branch.
+        self.events = []
+        resources = ("SKILL.md", "references/invocation-inputs.md", "references/diagnosis-and-repair.md",
+                     "references/case-retrieval.md", "references/verification-failures.md")
+        for resource in resources[:-1]:
+            self.load_resource(resource)
+        self.call("discover_tools", {"service": "example/wiki"}, {"tools": []})
+        self.call("bash", {"command": "example-wiki --help"}, "command not found\n[exit_code: 127]")
+        self.load_resource(resources[-1])
+        self.event("InvocationMessage", {"text": "仅诊断；案例源已配置，无 MCP/CLI 与可复用原文，未查询、未转建议；原关键缺口仍在，停止交付。"})
+        result = self.audit("stop")
+        self.assertEqual(result["failures"], [])
+        self.assertEqual(result["gaps"], [])
+        self.assertEqual([r["resource"] for r in result["resource_reads"]], list(resources))
+        self.assertEqual(result["dimensions"]["cleanup_evidence"]["status"], "not_required")
+
+    def test_unavailable_case_path_does_not_waive_prior_build_cleanup(self):
+        self.workspace("capture"); self.build()
+        self.load_resource("references/case-retrieval.md")
+        self.call("discover_tools", {"service": "example/wiki"}, {"tools": []})
+        self.event("InvocationMessage", {"text": "已确认无案例访问路径与可复用原文，未查询、未转建议；沿用原停止流程。"})
+        self.assertIn("final_native_cleanup_match_unconfirmed", self.checks("stop"))
+        self.clean(); self.workspace("check")
+        self.assertEqual(self.audit("stop")["failures"], [])
+        self.assertEqual((self.repo / "target/preexisting.txt").read_text(), "job-owned\n")
+
     def test_case_advice_does_not_waive_cleanup_of_prior_build(self):
         self.workspace("capture"); self.build()
         self.load_resource("references/case-retrieval.md")
         self.event("InvocationMessage", {"text": "新证据使兼容性判断受阻，转案例建议，本轮不再实施修复。"})
+        self.call("case_search", {"query": "missing symbol"}, {"error": "service unavailable"})
         # Actual artifact/receipt checks, not an assertion that the audit enforces the advice branch.
         self.assertIn("final_native_cleanup_match_unconfirmed", self.checks("stop"))
         self.clean(); self.workspace("check")

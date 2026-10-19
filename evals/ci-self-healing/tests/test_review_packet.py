@@ -79,6 +79,35 @@ class PacketTests(unittest.TestCase):
                 self.assertEqual(projected["events"], p["events"])
                 self.assertEqual(projected["files"], p["files"])
 
+    def test_case_capability_and_post_entry_failures_keep_distinct_evidence(self):
+        resource = "references/case-retrieval.md"
+        body = read_regular(Path(__file__).resolve().parents[3] / "skills/ci-self-healing" / resource).decode()
+        for entered in (False, True):
+            with self.subTest(entered=entered):
+                p = self.packet(resource)
+                p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
+                p["events"] = p["events"][:2]
+                p["events"][1]["payload"]["result"] = body
+                decision = "转入案例建议分支，随后尝试查询。" if entered else "仅核对声明的 CLI，尚未查询或转建议。"
+                args = {"query": "missing symbol"} if entered else {"command": "example-wiki --help"}
+                tool = "wiki_search" if entered else "bash"
+                failure = {"error": "permission denied"} if entered else "command not found\n[exit_code: 127]"
+                report = "首次访问被拒，保持建议分支。" if entered else "无 MCP/CLI 与有效原文，未查询、未转建议；按原停止规则交付。"
+                p["events"] += [
+                    {"seq": 3, "evidence_id": "E0003", "kind": "InvocationMessage", "payload": {"text": decision}},
+                    {"seq": 4, "evidence_id": "E0004", "kind": "InvocationToolCallStart", "payload": {
+                        "tool_name": tool, "call_id": "access", "args": args}},
+                    {"seq": 5, "evidence_id": "E0005", "kind": "InvocationToolCallResult", "payload": {
+                        "call_id": "access", "result": failure}},
+                    {"seq": 6, "evidence_id": "E0006", "kind": "InvocationMessage", "payload": {"text": report}}]
+                # Preserve the raw order/results for semantic review; projection
+                # does not itself decide whether branch entry was warranted.
+                before = copy.deepcopy(p)
+                q = project_packet(p)
+                self.assertEqual(q["events"], p["events"])
+                self.assertEqual(q["files"], p["files"])
+                self.assertEqual(p, before)
+
     def test_missing_required_clause_stops_instead_of_silent_omission(self):
         p = self.packet(); p["events"][1]["payload"]["result"] = "# shortened guide"
         with self.assertRaisesRegex(EvalError, "clause missing"):
