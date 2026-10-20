@@ -26,7 +26,10 @@ class RecoveryGradingTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name).resolve()
         self.skill = self.base / "skill"
-        for name in ("SKILL.md", "scripts/report_check.py", "assets/analysis-fix.template.md"):
+        # This mocked recovery test exercises the original report-only delivery
+        # contract, independent of new mandatory artifacts in the live Skill.
+        write_new(self.skill / "SKILL.md", "# Synthetic recovery grading Skill\n")
+        for name in ("scripts/report_check.py", "assets/analysis-fix.template.md"):
             write_new(self.skill / name, read_regular(REPO / "skills/ci-self-healing" / name))
 
     def fixture(self, contract):

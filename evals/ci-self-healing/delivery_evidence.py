@@ -11,12 +11,12 @@ import shlex
 from common import EvalError, changes, digest, json_bytes, read_json, read_regular, snapshot
 from generation_budget import generation_failure
 from gateway_evidence import cancellation_time, gateway_failure
-from repair_support import DELIVERY_CONTRACT, SKILL_NAME, source_state
+from repair_support import DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACT, SKILL_NAME, source_state
 from skill_execution import audit_execution, options, script_tokens
 
 
 def reviewable_timeout(run):
-    return (run.get("delivery_contract") == DELIVERY_CONTRACT
+    return (run.get("delivery_contract") in DELIVERY_CONTRACTS
             and run.get("status") == "timeout" and run.get("process", {}).get("status") == "timeout"
             and run.get("delivery_assessment", {}).get("status") == "reviewable_stop_artifact")
 
@@ -52,9 +52,9 @@ def readonly_shell(command):
 
 def assess_delivery(trial, run):
     """Recomputable host receipt, bound by run/grade hashes; no persistent writes."""
-    result = {"contract": DELIVERY_CONTRACT, "status": "unconfirmed", "gaps": [],
+    result = {"contract": run.get("delivery_contract") if run.get("delivery_contract") in DELIVERY_CONTRACTS else DELIVERY_CONTRACT, "status": "unconfirmed", "gaps": [],
               "coverage": "observed stop marker, report bytes and non-mutating tool boundaries; intent requires independent review"}
-    if run.get("delivery_contract") != DELIVERY_CONTRACT:
+    if run.get("delivery_contract") not in DELIVERY_CONTRACTS:
         return {**result, "status": "not_assessed", "gaps": ["legacy_or_unsupported_contract"]}
     if run.get("process", {}).get("status") != "timeout":
         return {**result, "status": "not_applicable", "gaps": []}
@@ -72,7 +72,7 @@ def _assess(trial, run, result):
         raise EvalError("transcript changed")
     trace = normalize_trace(raw, run["expected_model_id"])
     events = trace["events"]
-    if (not events or events[0]["payload"].get("delivery_contract") != DELIVERY_CONTRACT
+    if (not events or events[0]["payload"].get("delivery_contract") != run["delivery_contract"]
             or not events[0]["payload"].get("clock_id")
             or events[0]["payload"]["clock_id"] != run.get("process", {}).get("clock_id")
             or any(type(e.get("observed_ns")) is not int for e in events)
@@ -83,6 +83,13 @@ def _assess(trial, run, result):
         raise EvalError("final state changed")
     report = trial / "visible/output/analysis-fix.md"
     report_body = read_regular(report)
+    manifest_v2 = run["delivery_contract"] == MANIFEST_DELIVERY_CONTRACT
+    manifest = trial / "visible/output/file_change.json"
+    allowed_changes = {"output/analysis-fix.md"}
+    allowed_scripts = {"scripts/report_check.py"}
+    if manifest_v2:
+        allowed_changes.add("output/file_change.json")
+        allowed_scripts.add("scripts/file_change_check.py")
     sha = digest(report_body)
     result["report_sha256"] = sha
     calls, writes, checks, readbacks, stops = {}, [], [], [], []
@@ -96,7 +103,7 @@ def _assess(trial, run, result):
             gaps.append("tool_boundary_state_missing")
         if p.get("source_state_sha256", baseline) != baseline:
             gaps.append("source_state_changed_during_run")
-        if any(n != "output/analysis-fix.md" for n in p.get("changed_paths_since_previous_event", [])):
+        if any(n not in allowed_changes for n in p.get("changed_paths_since_previous_event", [])):
             gaps.append("other_workspace_changes")
         if kind == "InvocationMessage":
             text = p.get("text", "")
@@ -109,11 +116,13 @@ def _assess(trial, run, result):
             if name == "write_file" and args.get("path") == str(report):
                 if not stops or args.get("content", "").encode() != report_body:
                     gaps.append("report_write_not_bound_to_stop_and_final_bytes")
+            elif manifest_v2 and name == "write_file" and args.get("path") == str(manifest):
+                pass  # Final-byte and stop binding are checked below.
             elif name == "bash":
                 if not readonly_shell(args.get("command")):
                     gaps.append("opaque_or_mutating_shell")
             elif name == "run_skill_script":
-                if (args.get("skill_name") != SKILL_NAME or args.get("script_name") != "scripts/report_check.py"):
+                if (args.get("skill_name") != SKILL_NAME or args.get("script_name") not in allowed_scripts):
                     gaps.append("non_report_script")
             elif name not in {"read_file", "list_directory", "glob", "grep", "load_skill", "read_skill_resource"}:
                 gaps.append("unsupported_or_mutating_tool")
@@ -148,7 +157,16 @@ def _assess(trial, run, result):
                     readbacks.append(seq)
     if not (stops and writes and checks and readbacks and stops[-1] < writes[-1] < min(checks[-1], readbacks[-1])):
         gaps.append("stop_report_checkpoint_missing")
-    if changes(before, after) != ["output/analysis-fix.md"]:
+    manifest_delivery = None
+    if manifest_v2:
+        from manifest_delivery import check_manifest, manifest_checkpoint
+        manifest_check = check_manifest(trial.parent.parent, trial, before, after)
+        result["manifest_check"] = manifest_check
+        gaps.extend(manifest_check["gaps"] + manifest_check["failures"])
+        manifest_delivery = manifest_checkpoint(events, manifest, read_regular(manifest), stops)
+        result["manifest_delivery"] = manifest_delivery
+        gaps.extend(manifest_delivery["gaps"])
+    if set(changes(before, after)) != allowed_changes:
         gaps.append("not_report_only_change")
     audit = audit_execution(trial, events, after, "stop", run.get("backend", "native"),
                             contract=run.get("skill_execution_contract"), trace_gaps=trace["gaps"])
@@ -170,6 +188,8 @@ def _assess(trial, run, result):
             or run.get("isolation_confirmed") is not True or run.get("filesystem_status") != "captured"):
         gaps.append("execution_cleanup_or_snapshot_unconfirmed")
     checkpoint = max(checks[-1], readbacks[-1]) if checks and readbacks else None
+    if manifest_v2:
+        checkpoint = max(checkpoint, manifest_delivery["checkpoint_seq"]) if checkpoint and manifest_delivery.get("checkpoint_seq") else None
     if checkpoint:
         cp = events[checkpoint - 1]
         result.update(checkpoint_seq=checkpoint, checkpoint_ns=cp["observed_ns"],

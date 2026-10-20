@@ -25,6 +25,30 @@ EXECUTION_CONTRACTS = {LEGACY_EXECUTION_CONTRACT, *RECOVERY_EXECUTION_CONTRACTS}
 EXECUTION_RESOURCE_DECLARATION = {"schema": "ci-skill-execution-resources/v1", "contract": EXECUTION_CONTRACT}
 ADMISSION_CHANNEL_CONTRACT = "agent-message-v1"
 DELIVERY_CONTRACT = "stop-artifact-v1"
+MANIFEST_DELIVERY_CONTRACT = "stop-artifact-v2"
+DELIVERY_CONTRACTS = {DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT}
+DELIVERY_RESOURCE_DECLARATION = {"schema": "ci-skill-delivery-resources/v1", "contract": MANIFEST_DELIVERY_CONTRACT}
+
+
+def delivery_contract(skill):
+    """Choose delivery requirements from the frozen package; keep old packages v1."""
+    skill = Path(skill)
+    declaration = skill / "assets/delivery-resources.json"
+    if not declaration.exists() and not declaration.is_symlink():
+        if "file_change.json" in read_regular(skill / "SKILL.md").decode():
+            raise EvalError("Skill manifest delivery declaration missing")
+        return DELIVERY_CONTRACT
+    value = read_json(declaration)
+    if value != DELIVERY_RESOURCE_DECLARATION:
+        raise EvalError("unsupported Skill delivery declaration")
+    return value["contract"]
+
+
+def delivery_contract_matches(expected, run):
+    """Old Docker receipts omitted v1; v2 always requires an explicit binding."""
+    actual = run.get("delivery_contract")
+    return actual == expected or (expected == DELIVERY_CONTRACT and actual is None
+                                  and run.get("backend", "docker") == "docker")
 
 
 def execution_contract(skill):
@@ -136,7 +160,7 @@ def validate_repair_artifacts(trial, run):
         raise EvalError("repair session artifacts changed")
     if digest(read_regular(trial / "adapter/task.txt")) != run.get("task_sha256"):
         raise EvalError("repair runtime task changed")
-    if run.get("delivery_contract") == DELIVERY_CONTRACT:
+    if run.get("delivery_contract") in DELIVERY_CONTRACTS:
         from delivery_evidence import assess_delivery
         if run.get("delivery_assessment") != assess_delivery(trial, run):
             raise EvalError("delivery evidence changed")

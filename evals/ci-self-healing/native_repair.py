@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 from common import bind_json, HOST_CLOCK_ID, EvalError, changes, command, digest, json_bytes, read_json, read_regular, remaining_timeout, run_logged, snapshot, stop_owned_group, write_json, write_new
 from host_sandbox import environment as child_env, policy
-from repair_support import ADAPTER_FILES, RUNTIME_CONTRACT, execution_contract, DELIVERY_CONTRACT, budget_notice, session_receipt
+from repair_support import ADAPTER_FILES, RUNTIME_CONTRACT, execution_contract, delivery_contract, budget_notice, session_receipt
 from suite import ROOT, load_suite, select_trials, skill_from_dir
 from runtime_diagnostics import write_diagnostics
 from resource_cleanup import OwnedResources, cleanup_complete
@@ -442,7 +442,7 @@ def run_trials(root, config, trial_id=None):
                        "backend": "native", "runtime_contract": RUNTIME_CONTRACT, "expected_model_id": model["model_id"],
                        "agent": "EvalCode", "skill_sha256": row["skill_sha256"], "filesystem_status": "captured",
                        "skill_execution_contract": audit_contract,
-                       "delivery_contract": DELIVERY_CONTRACT,
+                       "delivery_contract": delivery_contract(info["skill"]),
                        "task_sha256": digest(task.encode()), "stdout_sha256": digest(read_regular(trial / "execution/stdout.log")),
                        "runtime_binding_sha256": digest(json_bytes(binding)), "profile_snapshot_sha256": profile_hash,
                        "session_receipt_sha256": digest(read_regular(trial / "session-receipt.json")),

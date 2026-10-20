@@ -6,6 +6,7 @@ import re
 import subprocess
 import uuid
 
+from repair_support import delivery_contract, MANIFEST_DELIVERY_CONTRACT
 from cases import CASES, git_environment, git_metadata, materialize
 from common import EvalError, command, digest, json_bytes, markdown_allowed, read_checked_stream, read_json, read_regular, snapshot, write_json, write_new
 
@@ -13,6 +14,8 @@ from common import EvalError, command, digest, json_bytes, markdown_allowed, rea
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parents[1]
 SCHEMA = "ci-skill-eval-v1"
+LEGACY_CHECKER_FILES = ("scripts/report_check.py", "assets/analysis-fix.template.md")
+MANIFEST_CHECKER_FILE = "scripts/file_change_check.py"
 
 
 def runtime_path(name):
@@ -108,10 +111,14 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
             write_new(output / "skills" / label / name, data)
     # Versioned evaluation contract, not a checker automatically taken from the
     # proposed Skill. Contract migrations must be reviewed as evaluator changes.
+    deliveries = {label: delivery_contract(output / "skills" / label) for label in bundles}
     checker = {}
-    for name in ("scripts/report_check.py", "assets/analysis-fix.template.md"):
+    for name in LEGACY_CHECKER_FILES:
         checker[name] = read_regular(ROOT / "contracts/v1" / name)
         write_new(output / "checker" / name, checker[name])
+    if MANIFEST_DELIVERY_CONTRACT in deliveries.values():
+        checker[MANIFEST_CHECKER_FILE] = read_regular(ROOT / "contracts/file-change-v1" / MANIFEST_CHECKER_FILE)
+        write_new(output / "checker" / MANIFEST_CHECKER_FILE, checker[MANIFEST_CHECKER_FILE])
     jobs = [(case, label, index + 1) for case in selected for label in bundles for index in range(repeats)]
     random.Random(seed).shuffle(jobs)
     records = []
@@ -132,6 +139,8 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
                 "skills": {label: bundle_hash(files) for label, files in bundles.items()},
                 "report_contract": "v1", "checker_sha256": bundle_hash(checker),
                 "trials": records}
+    if MANIFEST_DELIVERY_CONTRACT in deliveries.values():
+        manifest.update(delivery_contracts=deliveries, checker_files=list(checker))
     write_json(output / "suite.json", manifest)
     return manifest
 
@@ -159,7 +168,17 @@ def load_suite(root):
     for label, wanted in manifest["skills"].items():
         if label not in {"before", "after", "candidate"} or bundle_hash(skill_from_dir(root / "skills" / label)) != wanted:
             raise EvalError("Skill snapshot changed after preparation")
-    checker = {name: read_regular(root / "checker" / name) for name in ("scripts/report_check.py", "assets/analysis-fix.template.md")}
+    checker_files = manifest.get("checker_files", list(LEGACY_CHECKER_FILES))
+    if "delivery_contracts" in manifest:
+        actual = {label: delivery_contract(root / "skills" / label) for label in manifest["skills"]}
+        if manifest["delivery_contracts"] != actual:
+            raise EvalError("frozen Skill delivery contract changed")
+        expected = [*LEGACY_CHECKER_FILES, MANIFEST_CHECKER_FILE]
+        if MANIFEST_DELIVERY_CONTRACT not in actual.values() or checker_files != expected:
+            raise EvalError("invalid manifest checker contract")
+    elif checker_files != list(LEGACY_CHECKER_FILES):
+        raise EvalError("unsupported checker files")
+    checker = {name: read_regular(root / "checker" / name) for name in checker_files}
     if bundle_hash(checker) != manifest["checker_sha256"]:
         raise EvalError("fixed report checker changed")
     return manifest

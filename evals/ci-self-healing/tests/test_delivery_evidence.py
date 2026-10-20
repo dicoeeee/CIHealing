@@ -15,7 +15,7 @@ from generation_budget import generation_failure
 from grading import combined_status, grade_trial, normalize_trace
 from repair_support import DELIVERY_CONTRACT, EXECUTION_CONTRACT, RUNTIME_CONTRACT, session_receipt, source_state
 from review import make_packet
-from suite import REPO, prepare
+from suite import REPO, prepare, bundle_hash, LEGACY_CHECKER_FILES
 from test_eval import STOP_REPORT, encode_trace
 
 
@@ -25,6 +25,14 @@ class DeliveryEvidenceTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve() / "suite"
         manifest = prepare(self.root, REPO / "skills/ci-self-healing", repeats=1, mode="single", case_ids=["case-003"], backend="native")
+        if not getattr(self, "manifest_delivery", False):
+            # This fixture exercises historical stop-artifact-v1 receipts. Keep
+            # its suite envelope at the original two-file checker contract.
+            manifest.pop("delivery_contracts", None)
+            manifest.pop("checker_files", None)
+            manifest["checker_sha256"] = bundle_hash({name: read_regular(self.root / "checker" / name)
+                                                       for name in LEGACY_CHECKER_FILES})
+            (self.root / "suite.json").write_text(json.dumps(manifest))
         self.row = manifest["trials"][0]
         self.trial = self.root / "trials" / self.row["id"]
         self.visible = self.trial / "visible"

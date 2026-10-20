@@ -18,7 +18,7 @@ import threading
 import time
 
 from common import EvalError, changes, digest, json_bytes, read_json, snapshot
-from repair_support import SESSION_MOUNT, SKILL_MOUNT, SKILL_NAME, RUNTIME_CONTRACT, execution_contract, DELIVERY_CONTRACT, source_state
+from repair_support import SESSION_MOUNT, SKILL_MOUNT, SKILL_NAME, RUNTIME_CONTRACT, execution_contract, delivery_contract, source_state
 from repair_telemetry import transport_timing
 from chrys_capabilities import observer_capabilities
 
@@ -142,7 +142,7 @@ def main():
     cli = layout.get("cli", "chrys") if args.native_layout else "chrys"
     recorder.emit("observer.started", {**capabilities, "cli": cli, "runtime_contract": RUNTIME_CONTRACT,
                                       "skill_execution_contract": audit_contract,
-                                      "delivery_contract": DELIVERY_CONTRACT,
+                                      "delivery_contract": delivery_contract(skill),
                                       "clock_id": layout.get("clock_id") if args.native_layout else None,
                                       "coverage": "public-events-and-tool-boundary-snapshots"})
     buffer = io.StringIO()
