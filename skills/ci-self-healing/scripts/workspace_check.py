@@ -484,12 +484,28 @@ def positive(raw):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="operation", required=True)
+    descriptions = {
+        "capture": (
+            "Apply ALL authorized candidate edits first, then capture the resulting "
+            "workspace BEFORE the verification group starts. Keep original contents "
+            "separately for rollback. Later candidate edits invalidate this capture. "
+            "For an authorized diagnosis experiment without a candidate, capture the "
+            "pre-experiment state with an experiment reference instead. This command "
+            "records current state; it cannot prove candidate readiness or correct timing."
+        ),
+        "check": (
+            "After the verification group and safe cleanup, compare against its original "
+            "capture. For candidate verification, match means the repaired candidate "
+            "remains intact, not that the original source has been restored."
+        ),
+    }
     for operation in ("capture", "check"):
-        command = sub.add_parser(operation, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        command = sub.add_parser(operation, description=descriptions[operation],
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         command.add_argument("--root", action="append", required=True, help="Explicit source root; repeat for disjoint repositories.")
         command.add_argument("--manifest", required=True, help="New manifest (capture) or original manifest (check), outside roots.")
         command.add_argument("--invocation-id", required=True)
-        command.add_argument("--candidate-id", required=True, help="Reference to the actual pre-build candidate; not a Git HEAD substitute.")
+        command.add_argument("--candidate-id", required=True, help="Caller-provided candidate or experiment reference; the label does not prove capture timing and is not a Git HEAD substitute.")
         command.add_argument("--max-entries", type=positive, default=100000, help="Per-pass entry budget, including directories.")
         command.add_argument("--max-bytes", type=positive, default=10 * 1024 ** 3, help="Per-pass content byte budget; two passes are used.")
         if operation == "check":
