@@ -25,8 +25,10 @@ EXECUTION_CONTRACTS = {LEGACY_EXECUTION_CONTRACT, *RECOVERY_EXECUTION_CONTRACTS}
 EXECUTION_RESOURCE_DECLARATION = {"schema": "ci-skill-execution-resources/v1", "contract": EXECUTION_CONTRACT}
 ADMISSION_CHANNEL_CONTRACT = "agent-message-v1"
 DELIVERY_CONTRACT = "stop-artifact-v1"
-MANIFEST_DELIVERY_CONTRACT = "stop-artifact-v2"
-DELIVERY_CONTRACTS = {DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT}
+LEGACY_MANIFEST_DELIVERY_CONTRACT = "stop-artifact-v2"
+MANIFEST_DELIVERY_CONTRACT = "stop-artifact-v3"
+MANIFEST_DELIVERY_CONTRACTS = {LEGACY_MANIFEST_DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT}
+DELIVERY_CONTRACTS = {DELIVERY_CONTRACT, *MANIFEST_DELIVERY_CONTRACTS}
 DELIVERY_RESOURCE_DECLARATION = {"schema": "ci-skill-delivery-resources/v1", "contract": MANIFEST_DELIVERY_CONTRACT}
 
 
@@ -39,13 +41,14 @@ def delivery_contract(skill):
             raise EvalError("Skill manifest delivery declaration missing")
         return DELIVERY_CONTRACT
     value = read_json(declaration)
-    if value != DELIVERY_RESOURCE_DECLARATION:
+    if value not in [{**DELIVERY_RESOURCE_DECLARATION, "contract": version}
+                     for version in MANIFEST_DELIVERY_CONTRACTS]:
         raise EvalError("unsupported Skill delivery declaration")
     return value["contract"]
 
 
 def delivery_contract_matches(expected, run):
-    """Old Docker receipts omitted v1; v2 always requires an explicit binding."""
+    """Old Docker receipts omitted v1; manifest delivery requires an explicit binding."""
     actual = run.get("delivery_contract")
     return actual == expected or (expected == DELIVERY_CONTRACT and actual is None
                                   and run.get("backend", "docker") == "docker")

@@ -6,7 +6,7 @@ import re
 import subprocess
 import uuid
 
-from repair_support import delivery_contract, MANIFEST_DELIVERY_CONTRACT
+from repair_support import delivery_contract, MANIFEST_DELIVERY_CONTRACTS
 from cases import CASES, git_environment, git_metadata, materialize
 from common import EvalError, command, digest, json_bytes, markdown_allowed, read_checked_stream, read_json, read_regular, snapshot, write_json, write_new
 
@@ -116,7 +116,7 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
     for name in LEGACY_CHECKER_FILES:
         checker[name] = read_regular(ROOT / "contracts/v1" / name)
         write_new(output / "checker" / name, checker[name])
-    if MANIFEST_DELIVERY_CONTRACT in deliveries.values():
+    if MANIFEST_DELIVERY_CONTRACTS.intersection(deliveries.values()):
         checker[MANIFEST_CHECKER_FILE] = read_regular(ROOT / "contracts/file-change-v1" / MANIFEST_CHECKER_FILE)
         write_new(output / "checker" / MANIFEST_CHECKER_FILE, checker[MANIFEST_CHECKER_FILE])
     jobs = [(case, label, index + 1) for case in selected for label in bundles for index in range(repeats)]
@@ -139,7 +139,7 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
                 "skills": {label: bundle_hash(files) for label, files in bundles.items()},
                 "report_contract": "v1", "checker_sha256": bundle_hash(checker),
                 "trials": records}
-    if MANIFEST_DELIVERY_CONTRACT in deliveries.values():
+    if MANIFEST_DELIVERY_CONTRACTS.intersection(deliveries.values()):
         manifest.update(delivery_contracts=deliveries, checker_files=list(checker))
     write_json(output / "suite.json", manifest)
     return manifest
@@ -174,7 +174,7 @@ def load_suite(root):
         if manifest["delivery_contracts"] != actual:
             raise EvalError("frozen Skill delivery contract changed")
         expected = [*LEGACY_CHECKER_FILES, MANIFEST_CHECKER_FILE]
-        if MANIFEST_DELIVERY_CONTRACT not in actual.values() or checker_files != expected:
+        if not MANIFEST_DELIVERY_CONTRACTS.intersection(actual.values()) or checker_files != expected:
             raise EvalError("invalid manifest checker contract")
     elif checker_files != list(LEGACY_CHECKER_FILES):
         raise EvalError("unsupported checker files")

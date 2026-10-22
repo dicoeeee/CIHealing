@@ -126,7 +126,7 @@ output_dir: /path/to/healing-output
 
 以上为双目录 CI Job 场景；仅诊断请求不会因双参数获得修复权限。未提供 `output_dir` 时在宿主消息中交付报告；提供有效目录时生成 `analysis-fix.md` 和 `file_change.json`。其他调用和验证模式按 [SKILL.md](SKILL.md) 选择。
 
-`file_change.json` 使用 `{"version":"0.1","changes":[...]}`，每项必填 `file`、`op`、`repo`、`desc`：文件路径相对所属 Git root，操作为 `modify` / `create` / `delete`，仓库名与修改说明分别填写；无代码修改时为 `{"version":"0.1","changes":[]}`。外部系统读取清单后生成 Patch，详细格式、范围与校验见 [变更文件清单](references/file-change-manifest.md)。
+`file_change.json` 使用 `{"version":"0.1","changes":[...]}`，每项必填 `file`、`op`、`repo`、`desc`：文件路径相对所属 Git root，操作为 `modify` / `create` / `delete`，`repo` 固定为该 Git root 的 basename（最后一级目录名，供调度器匹配），`desc` 填写修改说明；无代码修改时为 `{"version":"0.1","changes":[]}`。例如 Git root 为 `/job/sourcecode` 时，即使项目名为 `routing-feature`，`repo` 也必须是 `sourcecode`。外部系统读取清单后生成 Patch，详细格式、范围与校验见 [变更文件清单](references/file-change-manifest.md)。
 
 ## 维护与离线检查
 

@@ -1,6 +1,7 @@
 """Offline dual-artifact delivery and legacy compatibility; no model services."""
 import copy
 import json
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -12,7 +13,7 @@ from common import EvalError, digest, read_json, read_regular, snapshot, write_j
 from delivery_evidence import assess_delivery, reviewable_timeout
 from grading import grade_trial, summarize
 from manifest_delivery import check_manifest
-from repair_support import DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT, delivery_contract, delivery_contract_matches
+from repair_support import DELIVERY_CONTRACT, LEGACY_MANIFEST_DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT, delivery_contract, delivery_contract_matches
 from suite import REPO, load_suite, prepare
 import test_delivery_evidence as legacy_delivery
 from test_eval import STOP_REPORT
@@ -112,7 +113,7 @@ class ManifestDeliveryTests(unittest.TestCase):
     def test_nonempty_manifest_without_source_changes_is_rejected(self):
         path = self.f.visible / "output/file_change.json"
         content = json.dumps({"version": "0.1", "changes": [
-            {"file": "src/main/java/example/Router.java", "repo": "routing-feature", "op": "modify", "desc": "synthetic"}]})
+            {"file": "src/main/java/example/Router.java", "repo": "sourcecode", "op": "modify", "desc": "synthetic"}]})
         path.write_text(content)
         self.assertIn("file_change_manifest_does_not_match_source", self.f.assess()["gaps"])
 
@@ -131,6 +132,15 @@ class ManifestDeliveryTests(unittest.TestCase):
         result = self.f.assess()
         self.assertIn("not_report_only_change", result["gaps"])
         self.assertIn("non_report_script", result["gaps"])
+
+    def test_v2_stop_artifact_still_requires_both_files(self):
+        self.f.run["delivery_contract"] = LEGACY_MANIFEST_DELIVERY_CONTRACT
+        self.f.events[0]["payload"]["delivery_contract"] = LEGACY_MANIFEST_DELIVERY_CONTRACT
+        result = self.f.assess()
+        self.assertEqual(result["status"], "reviewable_stop_artifact", result)
+        self.assertEqual(result["manifest_check"]["status"], "passed")
+        (self.f.visible / "output/file_change.json").unlink()
+        self.assertNotEqual(self.f.assess()["status"], "reviewable_stop_artifact")
 
     def completed_grade(self):
         f = self.f
@@ -169,9 +179,9 @@ class ManifestDeliveryTests(unittest.TestCase):
         result = self.completed_grade()
         self.assertIn("delivery_contract_mismatch", result["gaps"])
 
-    def test_completed_v2_suite_cannot_downgrade_or_omit_run_contract(self):
+    def test_completed_v3_suite_cannot_downgrade_or_omit_run_contract(self):
         original = copy.deepcopy(self.f.run)
-        for contract in (DELIVERY_CONTRACT, None):
+        for contract in (DELIVERY_CONTRACT, LEGACY_MANIFEST_DELIVERY_CONTRACT, None):
             with self.subTest(contract=contract):
                 self.f.run = copy.deepcopy(original)
                 if contract is None:
@@ -193,7 +203,7 @@ class ManifestDeliveryTests(unittest.TestCase):
         target = f.trial / "mapping.json"
         target.write_bytes(original)
         mapping.symlink_to(target)
-        checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible))
+        checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible), contract=MANIFEST_DELIVERY_CONTRACT)
         self.assertIn("file_change_repository_mapping_unavailable", checked["gaps"])
         mapping.unlink()
         for body in ('[1]', '{"repositories":[null]}', '{"repositories":"bad"}', '{bad'):
@@ -203,38 +213,77 @@ class ManifestDeliveryTests(unittest.TestCase):
                 # in addition to the ordinary changed-input check.
                 before = copy.deepcopy(f.before)
                 before["scene/build_info.json"]["sha256"] = digest(body.encode())
-                checked = check_manifest(f.root, f.trial, before, snapshot(f.visible))
+                checked = check_manifest(f.root, f.trial, before, snapshot(f.visible), contract=MANIFEST_DELIVERY_CONTRACT)
                 self.assertIn("file_change_repository_mapping_unavailable", checked["gaps"])
 
     def test_independent_check_requires_paths_operations_and_repository_to_match(self):
         f = self.f
+        mapping = read_json(f.visible / "scene/build_info.json")["repositories"][0]
+        self.assertEqual(mapping["name"], "routing-feature")
+        self.assertEqual(Path(mapping["source_dir"]).name, "sourcecode")
         source = f.visible / "scene/sourcecode/src/main/java/example/Router.java"
         source.write_text(source.read_text() + "// synthetic\n")
-        item = {"file": "src/main/java/example/Router.java", "repo": "routing-feature", "op": "modify", "desc": "synthetic"}
+        item = {"file": "src/main/java/example/Router.java", "repo": "sourcecode", "op": "modify", "desc": "synthetic"}
         path = f.visible / "output/file_change.json"
         for entry, status in ((item, "passed"), ({**item, "op": "create"}, "failed"),
-                              ({**item, "repo": "sourcecode"}, "failed"),
-                              ({**item, "file": "routing-feature/" + item["file"]}, "failed")):
+                              ({**item, "repo": "routing-feature"}, "failed"),
+                              ({**item, "file": "sourcecode/" + item["file"]}, "failed")):
             with self.subTest(entry=entry):
                 path.write_text(json.dumps({"version": "0.1", "changes": [entry]}))
-                result = check_manifest(f.root, f.trial, f.before, snapshot(f.visible))
+                result = check_manifest(f.root, f.trial, f.before, snapshot(f.visible), contract=MANIFEST_DELIVERY_CONTRACT)
                 self.assertEqual(result["status"], status)
+
+    def test_v2_replay_preserves_logical_name_but_v3_requires_git_root_basename(self):
+        f = self.f
+        source = f.visible / "scene/sourcecode/src/main/java/example/Router.java"
+        source.write_text(source.read_text() + "// synthetic\n")
+        path = f.visible / "output/file_change.json"
+        for contract, expected_repo in ((LEGACY_MANIFEST_DELIVERY_CONTRACT, "routing-feature"),
+                                         (MANIFEST_DELIVERY_CONTRACT, "sourcecode")):
+            for repo in ("routing-feature", "sourcecode"):
+                with self.subTest(contract=contract, repo=repo):
+                    path.write_text(json.dumps({"version": "0.1", "changes": [{
+                        "file": "src/main/java/example/Router.java", "repo": repo,
+                        "op": "modify", "desc": "synthetic"}]}))
+                    checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible), contract=contract)
+                    self.assertEqual(checked["status"], "passed" if repo == expected_repo else "failed")
+
+    def test_v3_rejects_missing_or_wrong_fixture_git_root_mapping(self):
+        f = self.f
+        path = f.visible / "scene/build_info.json"
+        original = read_json(path)
+        for source_dir in (None, {}, "/elsewhere/sourcecode", "/trial/scene/sourcecode/src"):
+            with self.subTest(source_dir=source_dir):
+                value = copy.deepcopy(original)
+                value["repositories"][0]["source_dir"] = source_dir
+                path.write_text(json.dumps(value))
+                before = copy.deepcopy(f.before)
+                before["scene/build_info.json"]["sha256"] = digest(path.read_bytes())
+                checked = check_manifest(f.root, f.trial, before, snapshot(f.visible), contract=MANIFEST_DELIVERY_CONTRACT)
+                self.assertEqual(checked["status"], "incomplete")
+                self.assertIn("file_change_repository_mapping_unavailable", checked["gaps"])
+
+    def test_unknown_manifest_contract_cannot_pass_even_for_empty_changes(self):
+        f = self.f
+        checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible), contract="unknown")
+        self.assertEqual(checked["status"], "incomplete")
+        self.assertIn("file_change_contract_unsupported", checked["gaps"])
 
     def test_final_rename_requires_both_delete_and_create(self):
         f = self.f
         source = f.visible / "scene/sourcecode/src/main/java/example/Router.java"
         source.rename(source.with_name("RenamedRouter.java"))
         items = [
-            {"file": "src/main/java/example/Router.java", "repo": "routing-feature",
+            {"file": "src/main/java/example/Router.java", "repo": "sourcecode",
              "op": "delete", "desc": "移除旧路径"},
-            {"file": "src/main/java/example/RenamedRouter.java", "repo": "routing-feature",
+            {"file": "src/main/java/example/RenamedRouter.java", "repo": "sourcecode",
              "op": "create", "desc": "移入新路径"},
         ]
         path = f.visible / "output/file_change.json"
         for entries, status in ((items, "passed"), (items[:1], "failed"), (items[1:], "failed")):
             with self.subTest(entries=entries):
                 path.write_text(json.dumps({"version": "0.1", "changes": entries}))
-                checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible))
+                checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible), contract=MANIFEST_DELIVERY_CONTRACT)
                 self.assertEqual(checked["status"], status)
 
     def test_restored_edits_and_removed_new_file_leave_empty_manifest(self):
@@ -246,11 +295,41 @@ class ManifestDeliveryTests(unittest.TestCase):
         temporary = source.with_name("Temporary.java")
         temporary.write_text("// synthetic\n")
         temporary.unlink()
-        checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible))
+        checked = check_manifest(f.root, f.trial, f.before, snapshot(f.visible), contract=MANIFEST_DELIVERY_CONTRACT)
         self.assertEqual(checked["status"], "passed", checked)
 
 
 class DeliveryContractSelectionTests(unittest.TestCase):
+    def test_v2_v3_comparison_freezes_both_contracts_without_reinterpreting_v2(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            old_skill = root / "v2-skill"
+            shutil.copytree(REPO / "skills/ci-self-healing", old_skill)
+            declaration = old_skill / "assets/delivery-resources.json"
+            value = read_json(declaration)
+            value["contract"] = LEGACY_MANIFEST_DELIVERY_CONTRACT
+            declaration.write_text(json.dumps(value))
+            self.assertEqual(delivery_contract(old_skill), LEGACY_MANIFEST_DELIVERY_CONTRACT)
+            for backend in ("native", "docker"):
+                with self.subTest(backend=backend):
+                    suite = root / backend
+                    manifest = prepare(suite, REPO / "skills/ci-self-healing", baseline_dir=old_skill,
+                                       repeats=1, mode="compare", case_ids=["case-003"], backend=backend)
+                    self.assertEqual(manifest["delivery_contracts"], {
+                        "before": LEGACY_MANIFEST_DELIVERY_CONTRACT, "after": MANIFEST_DELIVERY_CONTRACT})
+                    self.assertEqual(load_suite(suite), manifest)
+                    for row in manifest["trials"]:
+                        trial = suite / "trials" / row["id"]
+                        before = snapshot(trial / "visible")
+                        source = trial / "visible/scene/sourcecode/job-input.txt"
+                        source.write_text("synthetic candidate\n")
+                        contract = manifest["delivery_contracts"][row["version"]]
+                        repo = "sourcecode" if contract == MANIFEST_DELIVERY_CONTRACT else "routing-feature"
+                        write_json(trial / "visible/output/file_change.json", {"version": "0.1", "changes": [
+                            {"file": "job-input.txt", "op": "modify", "repo": repo, "desc": "synthetic"}]})
+                        checked = check_manifest(suite, trial, before, snapshot(trial / "visible"), contract=contract)
+                        self.assertEqual(checked["status"], "passed", checked)
+
     def test_frozen_package_selects_contract_and_missing_declaration_cannot_downgrade(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -276,7 +355,7 @@ class DeliveryContractSelectionTests(unittest.TestCase):
             with self.assertRaisesRegex(EvalError, "checker changed"):
                 load_suite(root)
 
-    def test_mixed_suite_preserves_old_docker_receipt_without_weakening_v2(self):
+    def test_mixed_suite_preserves_old_docker_receipt_without_weakening_manifest_delivery(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             legacy = root / "legacy"

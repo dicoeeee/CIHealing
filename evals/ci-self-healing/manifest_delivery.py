@@ -1,4 +1,4 @@
-"""File-change delivery checks for explicitly versioned v2 evaluation runs.
+"""File-change delivery checks for explicitly versioned evaluation runs.
 
 The checker is frozen by suite.prepare, never selected from candidate code.
 These fixture checks bind paths/operations to observed final source changes;
@@ -11,17 +11,20 @@ import subprocess
 import sys
 
 from common import EvalError, changes, digest, read_regular
-from repair_support import SKILL_NAME, source_state
+from repair_support import MANIFEST_DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACTS, SKILL_NAME, source_state
 from skill_execution import options, script_tokens
 
 
 MANIFEST_NAME = "output/file_change.json"
 
 
-def check_manifest(root, trial, before, after):
+def check_manifest(root, trial, before, after, *, contract):
     """Independent final-file check. Missing output is a gap, invalid output fails."""
     path = Path(trial) / "visible" / MANIFEST_NAME
     result = {"status": "incomplete", "failures": [], "gaps": []}
+    if contract not in MANIFEST_DELIVERY_CONTRACTS:
+        result["gaps"].append("file_change_contract_unsupported")
+        return result
     try:
         body = read_regular(path, 2 * 1024 * 1024)
     except (OSError, EvalError):
@@ -65,11 +68,20 @@ def check_manifest(root, trial, before, after):
                         or not isinstance(repositories[0].get("name"), str)
                         or not repositories[0]["name"].strip()):
                     raise ValueError("unsupported fixture repository mapping")
+                if contract == MANIFEST_DELIVERY_CONTRACT:
+                    # cases.materialize creates this Git root in both backends.
+                    # Bind to that fixture-owned location, not a model-selected
+                    # name or a Git command against model-controlled config.
+                    git_root = Path(trial).resolve() / "visible/scene/sourcecode"
+                    if repositories[0].get("source_dir") not in (str(git_root), "/trial/scene/sourcecode"):
+                        raise ValueError("fixture Git root mapping mismatch")
         except (OSError, EvalError, ValueError):
             repositories = None
             result["gaps"].append("file_change_repository_mapping_unavailable")
         if repositories is not None:
-            repo = repositories[0]["name"]
+            # v2 replay keeps its original logical-name interpretation. v3 uses
+            # the Git root basename required by the external scheduler.
+            repo = git_root.name if contract == MANIFEST_DELIVERY_CONTRACT else repositories[0]["name"]
             old, new = source_state(before), source_state(after)
             expected = set()
             for name in changes(old, new):

@@ -1,4 +1,4 @@
 {
   "schema": "ci-skill-delivery-resources/v1",
-  "contract": "stop-artifact-v2"
+  "contract": "stop-artifact-v3"
 }

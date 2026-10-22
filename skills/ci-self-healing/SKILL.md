@@ -127,7 +127,7 @@ output_dir: $output_dir
 
 调用或子任务结束时完整读取[文字版结果报告](references/result-report.md)及其唯一模板，先按任务选择适用表格，再填写六章、格式校验和最终读回复核。无修改、未验证或不适用简述原因；纯文字/工具不可用按报告指南降级。
 
-本次传入 `output_dir` 时，还须按[变更文件清单](references/file-change-manifest.md)在该目录交付 `file_change.json`；`version` 固定为字符串 `"0.1"`，数组键名为 `changes`，无代码修改时仍输出空数组。核对最终文件状态、校验并读回后交付，外部系统负责按清单生成 Patch；未传入时不自行选择目录输出清单。
+本次传入 `output_dir` 时，还须按[变更文件清单](references/file-change-manifest.md)在该目录交付 `file_change.json`；`version` 固定为字符串 `"0.1"`，数组键名为 `changes`，条目 `repo` 固定取所属实际 Git root 的 basename，无代码修改时仍输出空数组。核对最终文件状态、校验并读回后交付，外部系统负责按清单生成 Patch；未传入时不自行选择目录输出清单。
 
 ## 保持硬边界
 

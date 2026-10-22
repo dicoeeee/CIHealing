@@ -9,7 +9,7 @@ from cases import SOURCE_PREFIX, git_metadata
 from common import EvalError, changes, command, digest, json_bytes, read_json, read_regular, snapshot, write_json
 from runtime import load_runtime, probe_build
 from repair_support import RUNTIME_CONTRACT, validate_repair_artifacts
-from repair_support import EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACT, delivery_contract_matches
+from repair_support import EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, delivery_contract_matches
 from skill_execution import audit_execution
 from suite import load_suite, select_trials
 from generation_budget import generation_failure
@@ -135,7 +135,7 @@ def grade_trial(root, row, config):
     if not cleanup_complete(run):
         result["gaps"].append("runtime_resource_cleanup_incomplete")
     if run.get("delivery_contract") in DELIVERY_CONTRACTS:
-        if (run["delivery_contract"] == MANIFEST_DELIVERY_CONTRACT
+        if (run["delivery_contract"] in MANIFEST_DELIVERY_CONTRACTS
                 and (not trace["events"] or trace["events"][0]["payload"].get("delivery_contract") != run["delivery_contract"])):
             result["gaps"].append("delivery_contract_mismatch")
         result["delivery_assessment"] = run["delivery_assessment"]
@@ -216,9 +216,10 @@ def grade_trial(root, row, config):
     else:
         # Skill permits full-text fallback; do not silently accept a missing report.
         result["gaps"].append("report_file_missing_fallback_requires_review")
-    if MANIFEST_DELIVERY_CONTRACT in {expected_delivery, run.get("delivery_contract")}:
+    if MANIFEST_DELIVERY_CONTRACTS.intersection({expected_delivery, run.get("delivery_contract")}):
         from manifest_delivery import check_manifest
-        manifest_check = check_manifest(root, trial, before, after)
+        manifest_contract = expected_delivery if expected_delivery in MANIFEST_DELIVERY_CONTRACTS else run["delivery_contract"]
+        manifest_check = check_manifest(root, trial, before, after, contract=manifest_contract)
         result["file_change_check"] = manifest_check
         result["gaps"].extend(manifest_check["gaps"])
         result["failures"].extend({"check": code, "paths": ["output/file_change.json"]}
@@ -329,10 +330,10 @@ def summarize(root):
                 rows[-1]["status"] = "incomplete"
         if run.get("delivery_contract") in DELIVERY_CONTRACTS:
             rows[-1].update(execution_status=run["status"],
-                delivery_status=(("report_and_manifest_verified" if run.get("delivery_contract") == MANIFEST_DELIVERY_CONTRACT else "report_format_verified")
+                delivery_status=(("report_and_manifest_verified" if run.get("delivery_contract") in MANIFEST_DELIVERY_CONTRACTS else "report_format_verified")
                                  if grade and grade.get("report_check", {}).get("status") == "passed" and not reviewable_timeout(run)
                                  and "delivery_contract_mismatch" not in grade.get("gaps", [])
-                                 and (run.get("delivery_contract") != MANIFEST_DELIVERY_CONTRACT or grade.get("file_change_check", {}).get("status") == "passed")
+                                 and (run.get("delivery_contract") not in MANIFEST_DELIVERY_CONTRACTS or grade.get("file_change_check", {}).get("status") == "passed")
                                  else run.get("delivery_assessment", {}).get("status", "unconfirmed")),
                 review_status=(review.get("verdict", {}).get("verdict", "incomplete") if review and review.get("status") == "validated" else "not_reviewed"),
                 review_scope=grade.get("review_scope", "not_reviewed") if grade else "not_reviewed")

@@ -10,7 +10,7 @@ import uuid
 
 from cases import oracle
 from common import bind_json, EvalError, command, digest, json_bytes, read_json, read_regular, remaining_timeout, run_logged, snapshot, wall_budget, write_json, write_new
-from repair_support import ADAPTER_FILES, RUNTIME_CONTRACT, execution_contract, delivery_contract, MANIFEST_DELIVERY_CONTRACT, SESSION_MOUNT, SKILL_MOUNT, budget_notice, session_receipt
+from repair_support import ADAPTER_FILES, RUNTIME_CONTRACT, execution_contract, delivery_contract, MANIFEST_DELIVERY_CONTRACTS, SESSION_MOUNT, SKILL_MOUNT, budget_notice, session_receipt
 from suite import ROOT, load_suite, select_trials
 
 
@@ -228,9 +228,10 @@ def run_trials(root, runtime_path, trial_id=None):
                    "stdout_sha256": digest(read_regular(trial / "execution/stdout.log"))}
         # Legacy Docker receipts did not carry a delivery contract. Add it only
         # for packages that require the new manifest; no timeout salvage here.
-        if delivery_contract(trial / "runtime-skill") == MANIFEST_DELIVERY_CONTRACT:
+        selected_delivery = delivery_contract(trial / "runtime-skill")
+        if selected_delivery in MANIFEST_DELIVERY_CONTRACTS:
             from delivery_evidence import assess_delivery
-            receipt["delivery_contract"] = MANIFEST_DELIVERY_CONTRACT
+            receipt["delivery_contract"] = selected_delivery
             receipt["delivery_assessment"] = assess_delivery(trial, receipt)
         write_json(trial / "run.json", receipt)
         summaries.append({"id": row["id"], "status": receipt["status"]})

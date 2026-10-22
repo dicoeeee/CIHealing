@@ -11,7 +11,7 @@ import shlex
 from common import EvalError, changes, digest, json_bytes, read_json, read_regular, snapshot
 from generation_budget import generation_failure
 from gateway_evidence import cancellation_time, gateway_failure
-from repair_support import DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACT, SKILL_NAME, source_state
+from repair_support import DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, SKILL_NAME, source_state
 from skill_execution import audit_execution, options, script_tokens
 
 
@@ -83,11 +83,11 @@ def _assess(trial, run, result):
         raise EvalError("final state changed")
     report = trial / "visible/output/analysis-fix.md"
     report_body = read_regular(report)
-    manifest_v2 = run["delivery_contract"] == MANIFEST_DELIVERY_CONTRACT
+    requires_manifest = run["delivery_contract"] in MANIFEST_DELIVERY_CONTRACTS
     manifest = trial / "visible/output/file_change.json"
     allowed_changes = {"output/analysis-fix.md"}
     allowed_scripts = {"scripts/report_check.py"}
-    if manifest_v2:
+    if requires_manifest:
         allowed_changes.add("output/file_change.json")
         allowed_scripts.add("scripts/file_change_check.py")
     sha = digest(report_body)
@@ -116,7 +116,7 @@ def _assess(trial, run, result):
             if name == "write_file" and args.get("path") == str(report):
                 if not stops or args.get("content", "").encode() != report_body:
                     gaps.append("report_write_not_bound_to_stop_and_final_bytes")
-            elif manifest_v2 and name == "write_file" and args.get("path") == str(manifest):
+            elif requires_manifest and name == "write_file" and args.get("path") == str(manifest):
                 pass  # Final-byte and stop binding are checked below.
             elif name == "bash":
                 if not readonly_shell(args.get("command")):
@@ -158,9 +158,9 @@ def _assess(trial, run, result):
     if not (stops and writes and checks and readbacks and stops[-1] < writes[-1] < min(checks[-1], readbacks[-1])):
         gaps.append("stop_report_checkpoint_missing")
     manifest_delivery = None
-    if manifest_v2:
+    if requires_manifest:
         from manifest_delivery import check_manifest, manifest_checkpoint
-        manifest_check = check_manifest(trial.parent.parent, trial, before, after)
+        manifest_check = check_manifest(trial.parent.parent, trial, before, after, contract=run["delivery_contract"])
         result["manifest_check"] = manifest_check
         gaps.extend(manifest_check["gaps"] + manifest_check["failures"])
         manifest_delivery = manifest_checkpoint(events, manifest, read_regular(manifest), stops)
@@ -188,7 +188,7 @@ def _assess(trial, run, result):
             or run.get("isolation_confirmed") is not True or run.get("filesystem_status") != "captured"):
         gaps.append("execution_cleanup_or_snapshot_unconfirmed")
     checkpoint = max(checks[-1], readbacks[-1]) if checks and readbacks else None
-    if manifest_v2:
+    if requires_manifest:
         checkpoint = max(checkpoint, manifest_delivery["checkpoint_seq"]) if checkpoint and manifest_delivery.get("checkpoint_seq") else None
     if checkpoint:
         cp = events[checkpoint - 1]

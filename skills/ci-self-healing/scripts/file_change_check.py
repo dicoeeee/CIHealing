@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Read-only validation of file_change.json; does not inspect repos or make patches."""
+"""Read-only format validation of file_change.json. repo must be the owning Git
+root basename; this script does not inspect roots, verify that binding or make patches.
+"""
 
 from __future__ import annotations
 
@@ -86,7 +88,7 @@ def validate(data: bytes) -> list[dict]:
         if not valid_text(repo) or (
             repo != repo.strip() or repo in {".", ".."} or "/" in repo or "\\" in repo
         ):
-            issue("repository", location + ".repo", "repo 须为非空仓库名，不是路径或 owner/repo。")
+            issue("repository", location + ".repo", "repo 须为所属 Git root 的非空 basename，不是路径或 owner/repo；实际对应关系须另行核对。")
         if not valid_text(desc):
             issue("description", location + ".desc", "desc 须为非空 UTF-8 修改说明。")
         if isinstance(repo, str) and isinstance(file, str):

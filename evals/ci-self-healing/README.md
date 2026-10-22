@@ -237,6 +237,8 @@ python3 -B evals/ci-self-healing/review_chrys.py collect \
 6. 使用评测器独立保存的 `contracts/v1` 报告合同快照检查格式，不自动采用 after Skill 中的校验器；修改合同需单独审核并升级评测版本。再将不含版本标签/执行模型身份的文件、公开事件、确定性结果发给 suite 绑定的评审模型（默认 GLM 5.3）。评审必须引用真实证据 ID；工具调用、缺失事件、格式错误、伪造引用和前后矛盾均不能算评审通过。
 7. 按 before/after、案例、重复次数汇总 passed/failed/incomplete/not_run。确定性失败不能被评审覆盖；缺少语义评审不能算通过。结果只证明这一组模型/宿主/Skill/案例配置的样本表现。
 
+清单交付合同由冻结 Skill 的 `assets/delivery-resources.json` 选择：`stop-artifact-v2` 保留历史逻辑仓库名规则，`stop-artifact-v3` 要求 `repo` 等于实际 Git root 的 basename。当前用例特意保留项目名 `routing-feature` 与 Git root 目录名 `sourcecode` 的差异，v3 只接受后者。两版都要求报告与清单完整交付、条目匹配最终源码差异，无净修改时 `changes: []`；JSON 文件版本仍为 `"0.1"`，共用独立冻结的 `contracts/file-change-v1` 格式校验器。v1 旧报告合同及历史运行记录保持原样，旧 v2 通过不能证明符合调度器的 basename 匹配要求。
+
 ## 自愈会话留存、超时与排障
 
 新的运行合同为 `repair-runtime-v2`；只影响新 suite。旧记录保留原样，改过框架、镜像、profile 或任务路径后应重新 prepare，不在旧批次内续跑或覆盖证据。
