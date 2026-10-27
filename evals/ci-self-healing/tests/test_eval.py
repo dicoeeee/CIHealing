@@ -90,6 +90,39 @@ MR 无法区分两种目标；准入 stop，未编辑。
 
 
 class EvalTests(unittest.TestCase):
+    def test_objective_handoff_gaps_cannot_be_overridden_by_model_pass(self):
+        evidence, answer = packet(), verdict()
+        original = json.dumps(answer, sort_keys=True)
+        for status in ("failed", "incomplete"):
+            evidence["deterministic"]["handoff_evidence"] = {"status": status}
+            with self.assertRaisesRegex(EvalError, "objective handoff"):
+                validate_verdict(answer, evidence)
+            self.assertEqual(json.dumps(answer, sort_keys=True), original)
+        evidence["deterministic"]["handoff_evidence"] = {"status": "passed"}
+        validate_verdict(answer, evidence)
+
+    def test_handoff_cli_is_read_only_and_preserves_failure_exit_codes(self):
+        import eval as cli
+        from contextlib import redirect_stdout
+        for status, code in (("passed", 0), ("failed", 1), ("incomplete", 2)):
+            with mock.patch("review_chrys.audit_handoff_trial", return_value={"status": status}) as audit, \
+                    mock.patch("runtime.run_trials", side_effect=AssertionError("no execution")), \
+                    redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(cli.main(["audit-handoff", "--trial", "/focus/trials/empty"]), code)
+            audit.assert_called_once_with(Path("/focus/trials/empty"), review_input=False)
+            self.assertEqual(json.loads(output.getvalue())["status"], status)
+
+    def test_handoff_review_input_cli_only_emits_the_bound_packet(self):
+        import eval as cli
+        from contextlib import redirect_stdout
+        prepared = {"assessment_contract": "handoff-evidence-v2", "evidence": []}
+        with mock.patch("review_chrys.audit_handoff_trial", return_value=prepared) as audit, \
+                mock.patch("runtime.run_trials", side_effect=AssertionError("no execution")), \
+                redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(cli.main(["audit-handoff", "--trial", "/focus/trials/empty", "--review-input"]), 0)
+        audit.assert_called_once_with(Path("/focus/trials/empty"), review_input=True)
+        self.assertEqual(json.loads(output.getvalue()), prepared)
+
     def test_headless_failure_without_stdout_preserves_failure_boundary(self):
         self.assertEqual(headless_result("", 1), {})
         self.assertEqual(headless_result('{"result":"READY"}', 0), {"result": "READY"})

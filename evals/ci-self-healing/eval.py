@@ -44,6 +44,13 @@ def parser():
     retry.add_argument("--output", type=Path, required=True)
     retry.add_argument("--config", type=Path, required=True, help="existing batch config; only its native reviewer configuration is used")
     retry.add_argument("--execute-live", action="store_true")
+    handoff_prepare = commands.add_parser("prepare-handoff", help="prepare five independent synthetic handoff fixtures offline; no models or MCP connection")
+    handoff_prepare.add_argument("--output", type=Path, required=True, help="new directory; never overwrite frozen runs")
+    handoff_prepare.add_argument("--candidate", type=Path, required=True, help="Skill directory to freeze for the fixtures")
+    handoff_prepare.add_argument("--git", default="git", help="local Git executable for isolated synthetic repositories")
+    handoff = commands.add_parser("audit-handoff", help="read-only evidence audit of a completed focused synthetic handoff trial; no models, credentials, retries or historical rewrites")
+    handoff.add_argument("--trial", type=Path, required=True, help="focused trials/refine, adopt, injection, empty or denied directory; schema selected from its frozen contract")
+    handoff.add_argument("--review-input", action="store_true", help="emit bound facts, pending judgments and review instructions for new assessment contracts; no models or writes")
     for action in ("run", "grade", "review", "summary"):
         sub = commands.add_parser(action)
         sub.add_argument("--suite", type=Path, required=True)
@@ -66,7 +73,19 @@ def main(argv=None):
     try:
         if args.command in {"run", "review"} and not args.execute_live:
             raise EvalError("live execution requires --execute-live; no model was called")
-        if args.command == "review-attempt":
+        if args.command == "prepare-handoff":
+            from handoff_cases import prepare_cases
+            result = prepare_cases(args.output, args.candidate, git=args.git)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        elif args.command == "audit-handoff":
+            from review_chrys import audit_handoff_trial
+            result = audit_handoff_trial(args.trial, review_input=args.review_input)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            if args.review_input:
+                return 0
+            return {"passed": 0, "failed": 1, "incomplete": 2}[result["status"]]
+        elif args.command == "review-attempt":
             from batch import load_config
             from review_attempt import review_attempt
             result = review_attempt(args.source_review, args.output, load_config(args.config)["reviewer"], execute=args.execute_live)

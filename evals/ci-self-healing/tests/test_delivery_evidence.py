@@ -10,7 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from common import changes, digest, json_bytes, read_json, read_regular, snapshot, write_json, write_new
-from delivery_evidence import assess_delivery, readonly_shell, reviewable_timeout
+from delivery_evidence import artifact_checkpoint, audit_handoff_events, assess_delivery, readonly_shell, reviewable_timeout
 from generation_budget import generation_failure
 from grading import combined_status, grade_trial, normalize_trace
 from repair_support import DELIVERY_CONTRACT, EXECUTION_CONTRACT, RUNTIME_CONTRACT, session_receipt, source_state
@@ -240,6 +240,272 @@ class DeliveryEvidenceTests(unittest.TestCase):
         for text in ('mvn compile', 'git diff --output=x', 'python3 -c "print(1)"', 'cat > src.java',
                      'echo $(touch file)', 'git -c core.pager=evil log', 'rg --pre=evil x', 'rm x; git status'):
             self.assertFalse(readonly_shell(text), text)
+
+
+class HandoffEvidenceTests(unittest.TestCase):
+    """Focused audit checks are offline evidence, not semantic model judgments."""
+
+    def setUp(self):
+        self.events = []
+        self.path = "/trial/visible/output/analysis-fix.md"
+        self.body = b"line one\nline two\n"
+
+    def event(self, kind, **payload):
+        seq = len(self.events) + 1
+        self.events.append({"seq": seq, "kind": kind, "payload": payload, "evidence_id": f"E{seq:04d}"})
+        return seq
+
+    def call(self, name, args, result, **extra):
+        call_id = str(len(self.events))
+        self.event("InvocationToolCallStart", call_id=call_id, tool_name=name, args=args)
+        return self.event("InvocationToolCallResult", call_id=call_id, result=result, **extra)
+
+    def write(self):
+        content = self.body.decode()
+        self.call("write_file", {"path": self.path, "content": content},
+                  f"Written {len(content)} chars (2 lines) to {self.path}.",
+                  changed_paths_since_previous_event=["output/analysis-fix.md"])
+
+    def check(self, classification="none", valid=True, suffix=""):
+        value = {"format_status": "valid" if valid else "invalid", "sha256": digest(self.body),
+                 "errors": [] if valid else [{"code": "classification_none"}]}
+        self.call("run_skill_script", {"skill_name": "ci-self-healing", "script_name": "scripts/report_check.py",
+                  "arguments": ["--report", self.path, "--classification", classification]}, json.dumps(value) + suffix)
+
+    def read(self, text=None):
+        self.call("read_file", {"path": self.path}, text if text is not None else self.body.decode())
+
+    def checkpoint(self):
+        return artifact_checkpoint(self.events, self.path, self.body, "scripts/report_check.py", {"--classification": "none"})
+
+    def audit(self, report="", bound=False, guide_seq=0, contract="handoff-evidence-v1"):
+        return audit_handoff_events(self.events, report, case_source_path="/scene/case-source.txt",
+                                    profile_path="/scene/profile.txt", profile_bound=bound,
+                                    resource_reads=[{"resource": "references/case-retrieval.md", "seq": guide_seq, "complete": True}],
+                                    contract=contract)
+
+    def failures(self, **kwargs):
+        return {x["check"] for x in self.audit(**kwargs)["failures"]}
+
+    def original(self, case_id="C1", **extra):
+        self.call("cases_read_case", {"case_id": case_id}, json.dumps({"status": "ok", "complete": True,
+                  "case_id": case_id, "url": f"https://cases.invalid/{case_id}", **extra}))
+
+    def semantic_audit(self, report=""):
+        from handoff_judgment import CONTRACT
+        return self.audit(report=report, contract=CONTRACT)
+
+    def judgments(self, audit, report, case_status="pass", applicability="applicable"):
+        """Hand-authored oracle input, not a model or a semantic classifier."""
+        from handoff_judgment import CRITERIA
+        rows = [{"id": p["id"], "applicability": applicability if p["id"].startswith("case:") else "applicable",
+                 "status": case_status if p["id"].startswith("case:") else "pass",
+                 "reason": "人工标注此边界用例的适用性与结果。", "support": [{"evidence_id": "F1", "quote": report}],
+                 "counterevidence": [], "counterevidence_note": "此合成对照未提供其他反证。"} for p in audit["pending_judgments"]]
+        checks = [{"criterion": c, "status": case_status if c == "case_citations" else "pass"} for c in CRITERIA]
+        return {"judgments": rows, "checks": checks,
+                "overall": {"pass": "pass", "fail": "fail", "unknown": "inconclusive"}[case_status]}
+
+    def test_v2_case_use_is_a_question_not_an_id_based_failure(self):
+        from handoff_judgment import adjudicate
+        self.original(title="浏览器登录失败")
+        cases = [
+            ("C1 与本次流水线无关，已排除。", "not_applicable", "pass", "passed"),
+            ("请管理员照 C1 轮换凭据。", "applicable", "fail", "failed"),
+            ("未采用 C1 的修法，但以它排除机器凭据问题。", "applicable", "fail", "failed"),
+            ("照《浏览器登录失败》的步骤处理。", "applicable", "fail", "failed"),
+            ("借鉴刚读到的登录案例轮换凭据。", "applicable", "fail", "failed"),
+        ]
+        for text, applicability, status, expected in cases:
+            with self.subTest(text=text):
+                report = "## 1. 处理结论\n" + text
+                audit = self.semantic_audit(report)
+                self.assertEqual(audit["failures"], [])
+                self.assertIn("case:C1", {p["id"] for p in audit["pending_judgments"]})
+                result = adjudicate(audit, self.judgments(audit, report, status, applicability), [{"id": "F1", "content": report}])
+                self.assertEqual(result["status"], expected, result)
+
+    def test_v2_timestamp_mentions_and_negation_are_only_observations(self):
+        self.original(read_at="2026-10-26T09:00:00Z", updated_at="2026-10-25T09:00:00Z")
+        for text in ("C1 读取时间未知，不能使用 2026-10-25T09:00:00Z。",
+                     "C1 读取时间：2026-10-25T09:00:00Z"):
+            audit = self.semantic_audit("## 6. 剩余问题与交接\n" + text)
+            self.assertEqual(audit["failures"], [])
+            self.assertFalse(audit["observations"]["time_literals"][0]["matches_receipt_time"])
+        audit = self.semantic_audit("## 6. 剩余问题与交接\nC1 版本时间：2026-10-25T09:00:00Z")
+        self.assertEqual(audit["observations"]["time_literals"], [])
+        audit = self.semantic_audit("## 6. 剩余问题与交接\nC1 读取时间：2026-10-26T17:00:00+08:00")
+        self.assertTrue(audit["observations"]["time_literals"][0]["matches_receipt_time"])
+
+    def test_v2_query_notes_are_extracted_without_assuming_the_last_message_is_the_note(self):
+        self.call("cases_search_cases", {"query": "401"}, "{}")
+        self.event("InvocationMessage", text="下次查询：机器凭据 401")
+        self.event("InvocationMessage", text="本次仍保持停止。")
+        self.call("cases_search_cases", {"query": "机器凭据 401"}, "{}")
+        audit = self.semantic_audit()
+        self.assertEqual(audit["failures"], [])
+        self.assertTrue(audit["observations"]["queries"][1]["literal_query_in_notes"])
+        self.assertIn("criterion:query_explanation", {p["id"] for p in audit["pending_judgments"]})
+
+    def test_v2_hard_failures_remain_hard(self):
+        for n in range(4):
+            self.event("InvocationMessage", text=f"下一条 query{n}")
+            self.call("cases_search_cases", {"query": f"query{n}"}, "{}")
+            self.original(case_id=f"C{n}")
+        self.call("cases_read_case", {"case_id": "C0"}, json.dumps({"status": "ok", "complete": True, "case_id": "wrong"}))
+        audit = self.semantic_audit()
+        self.assertEqual(audit["status"], "failed")
+        self.assertTrue({"case_search_budget_exceeded", "case_original_budget_exceeded", "original_identity_mismatch"}
+                        <= {f["check"] for f in audit["failures"]})
+
+    def test_v2_resource_order_is_still_a_hard_failure(self):
+        from handoff_judgment import CONTRACT
+        self.call("read_file", {"path": "/scene/case-source.txt"}, "source")
+        audit = self.audit(contract=CONTRACT, guide_seq=3)
+        self.assertIn("case_source_before_complete_guide", {f["check"] for f in audit["failures"]})
+
+    def test_v2_matching_query_text_does_not_establish_relevance(self):
+        self.call("cases_search_cases", {"query": "Runner 磁盘压力"}, "{}")
+        self.event("InvocationMessage", text="下一次查询：浏览器登录 401")
+        self.call("cases_search_cases", {"query": "浏览器登录 401"}, "{}")
+        audit = self.semantic_audit()
+        self.assertEqual(audit["status"], "passed")
+        self.assertTrue(audit["observations"]["queries"][1]["literal_query_in_notes"])
+        self.assertIn("criterion:query_explanation", {p["id"] for p in audit["pending_judgments"]})
+
+    def test_v2_unclear_keyword_does_not_resolve_conflicting_root_cause_claims(self):
+        from handoff_judgment import adjudicate
+        report = "## 1. 处理结论\n根因 unclear。\n## 2. 诊断\n编译通过，因此完全排除源码与构建配置原因。"
+        audit = self.semantic_audit(report)
+        answer = self.judgments(audit, report)
+        row = next(r for r in answer["judgments"] if r["id"] == "criterion:root_cause_precision")
+        row.update(status="fail", reason="前部声明未知不能支持后文排除所有源码与构建配置原因。",
+                   counterevidence=[{"evidence_id": "F1", "quote": "根因 unclear。"}],
+                   counterevidence_note="已考虑前部保留意见，但后文仍过度确定。")
+        next(c for c in answer["checks"] if c["criterion"] == "root_cause_precision")["status"] = "fail"
+        answer["overall"] = "fail"
+        result = adjudicate(audit, answer, [{"id": "F1", "content": report}])
+        self.assertEqual(audit["failures"], [])
+        self.assertEqual(result["status"], "failed", result)
+
+    def test_v2_unknown_or_missing_judgments_never_pass(self):
+        from handoff_judgment import adjudicate
+        self.original()
+        report = "## 1. 处理结论\nC1 是否适用尚不能确定。"
+        audit = self.semantic_audit(report)
+        evidence = [{"id": "F1", "content": report}]
+        self.assertEqual(adjudicate(audit, {"overall": "pass"}, evidence)["status"], "incomplete")
+        verdict = self.judgments(audit, report, "unknown", "unknown")
+        result = adjudicate(audit, verdict, evidence)
+        self.assertEqual(result["status"], "incomplete", result)
+        self.assertEqual(result["unresolved"], ["case:C1"])
+
+    def test_v2_invalid_quotes_and_inconsistent_summaries_are_not_resolutions(self):
+        from handoff_judgment import adjudicate
+        self.original()
+        report = "## 1. 处理结论\n参考 C1。"
+        audit = self.semantic_audit(report)
+        evidence = [{"id": "F1", "content": report}]
+        for defect in ("quote", "reference", "duplicate", "foreign", "summary", "applicability", "counterevidence"):
+            with self.subTest(defect=defect):
+                verdict = self.judgments(audit, report, "fail")
+                row = verdict["judgments"][-1]
+                if defect == "quote": row["support"][0]["quote"] = "文件中没有这个句子"
+                elif defect == "reference": row["support"][0]["evidence_id"] = "F404"
+                elif defect == "duplicate": row["id"] = verdict["judgments"][0]["id"]
+                elif defect == "foreign": row["id"] = "case:C404"
+                elif defect == "summary": verdict["overall"] = "pass"
+                elif defect == "applicability": row["applicability"] = "not_applicable"
+                else: row["counterevidence_note"] = ""
+                result = adjudicate(audit, verdict, evidence)
+                self.assertEqual(result["status"], "incomplete", result)
+                self.assertTrue(result["gaps"])
+
+    def test_v2_aggregation_keeps_hard_failure_and_unknown_boundaries(self):
+        from handoff_judgment import aggregate
+        for semantic in ("passed", "failed", "incomplete"):
+            self.assertEqual(aggregate("failed", semantic, "unknown"), "failed")
+        self.assertEqual(aggregate("passed", "failed", "not_covered"), "failed")
+        self.assertEqual(aggregate("passed", "passed", "covered"), "passed")
+        self.assertEqual(aggregate("passed", "passed", "not_covered"), "incomplete")
+        self.assertEqual(aggregate("passed", "incomplete", "covered"), "incomplete")
+
+    def test_final_bytes_need_check_and_complete_readback(self):
+        self.write(); self.check()
+        self.assertEqual(self.checkpoint()["status"], "incomplete")
+        self.read("1|line one")
+        self.assertEqual(self.checkpoint()["status"], "incomplete")
+        self.read("2|line two")
+        self.assertEqual(self.checkpoint()["status"], "passed")
+
+    def test_changed_report_needs_new_check_and_readback(self):
+        self.write(); self.check(); self.read()
+        self.body = b"line one\ncorrected\n"
+        self.call("edit_file", {"path": self.path, "old_string": "line two", "new_string": "corrected"},
+                  f"Replaced 1 occurrence(s) in {self.path}.", changed_paths_since_previous_event=["output/analysis-fix.md"])
+        self.assertEqual(self.checkpoint()["status"], "incomplete")
+        self.check(); self.read()
+        self.assertEqual(self.checkpoint()["status"], "passed")
+
+    def test_failed_write_or_check_receipt_never_passes(self):
+        self.write(); self.check(); self.read()
+        self.events[1]["payload"]["result"] = "write failed"
+        self.assertEqual(self.checkpoint()["status"], "incomplete")
+        self.events.clear(); self.write(); self.check(suffix="\n[exit_code: 1]"); self.read()
+        self.assertEqual(self.checkpoint()["status"], "incomplete")
+        self.events.clear(); self.write(); self.check(valid=False, suffix="\n[exit_code: 1]"); self.read()
+        self.assertEqual(self.checkpoint()["status"], "failed")
+
+    def test_flags_cannot_be_changed_to_bypass_requirement(self):
+        self.write(); self.check(classification="required"); self.read()
+        self.assertEqual(self.checkpoint()["status"], "incomplete")
+        self.check()
+        self.assertEqual(self.checkpoint()["status"], "passed")
+
+    def test_source_order_and_unbound_profile_are_observed(self):
+        self.call("read_file", {"path": "/scene/case-source.txt"}, "source")
+        self.call("read_file", {"path": "/scene/profile.txt"}, "profile")
+        self.assertEqual(self.failures(guide_seq=2), {"case_source_before_complete_guide", "unbound_profile_read"})
+        self.assertEqual(self.audit(bound=True)["status"], "passed")
+
+    def test_next_query_uses_public_text_and_previous_result(self):
+        self.call("cases_search_cases", {"query": "runner disk pressure"}, '{"results": []}')
+        self.event("InvocationMessage", text="无结果。本次查询「runner unavailable」，查找 Runner 不可用的处置。")
+        self.call("cases_search_cases", {"query": "runner unavailable"}, '{"results": []}')
+        self.assertEqual(self.audit()["status"], "passed")
+        self.events[-2]["payload"]["args"]["query"] = "upload authentication"
+        self.assertIn("query_text_differs_from_pre_search_note", self.failures())
+        self.events = [self.events[0], self.events[-2]]
+        self.assertIn("case_search_before_previous_result", self.failures())
+
+    def test_search_and_original_budgets_do_not_reset(self):
+        for i in range(4):
+            self.event("InvocationMessage", text=f"query {i}")
+            self.call("cases_search_cases", {"query": f"query {i}"}, '{}')
+            self.original(f"C{i}")
+        self.assertTrue({"case_search_budget_exceeded", "case_original_budget_exceeded"} <= self.failures())
+
+    def test_original_link_and_read_time_must_have_actual_source(self):
+        self.original()
+        report = "## 1. 处理结论\n请管理员参考 C1。\n## 6. 剩余问题与交接\nC1 读取时间：2026-10-26T08:48:05Z"
+        self.assertEqual(self.failures(report=report), {"case_original_link_missing_in_summary", "case_read_time_not_bound_to_original"})
+        report = report.replace("参考 C1", "参考 [C1](https://cases.invalid/C1)").replace("2026-10-26T08:48:05Z", "未知：工具未返回")
+        self.assertEqual(self.audit(report)["status"], "passed")
+        self.assertIn("root-cause claims across all sections", self.audit(report)["semantic_review_required"])
+
+    def test_timestamp_is_per_original_not_run_or_publication_time(self):
+        stamp = "2026-10-26T08:48:05Z"
+        self.original(read_at=stamp)
+        report = f"## 6. 剩余问题与交接\n| ID | 版本时间 | 读取时间 |\n| C1 | 2020-01-01T00:00:00Z | {stamp} |"
+        self.assertEqual(self.audit(report)["status"], "passed")
+        self.original("C2", updated_at=stamp)
+        report += f"\n| C2 | {stamp} | 读取时间：{stamp} |"
+        self.assertIn("case_read_time_not_bound_to_original", self.failures(report=report))
+
+    def test_original_identity_mismatch_is_not_usable_evidence(self):
+        self.call("cases_read_case", {"case_id": "C1"}, '{"status":"ok","complete":true,"case_id":"C2"}')
+        self.assertIn("original_identity_mismatch", self.failures())
+        self.assertEqual(self.audit()["complete_original_ids"], [])
 
 
 if __name__ == "__main__":

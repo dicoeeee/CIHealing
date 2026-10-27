@@ -181,10 +181,62 @@ class ReportCheckTests(unittest.TestCase):
         text = text.replace("实际编辑前宿主记录 admission-1。", "stop；方向未决，见 admission-1。")
         self.assertEqual(self.errors(text, checks="none"), [])
 
+    def test_stop_report_removes_inapplicable_checks_without_changing_requirement(self):
+        text = no_changes(no_checks(BASE)).replace("local_verified", "denied")
+        text = text.replace("本地编译和适用检查通过；未执行外层流水线。", "策略要求转人工，本轮无验证计划或实际验证。")
+        table = """| 检查或命令 | 执行位置/目录或运行身份 | 结果 | 覆盖范围与未覆盖内容 | 证据 |
+| --- | --- | --- | --- | --- |
+| 原始 Job 失败 | 原 CI Job | failed | 历史失败，不是本轮验证 | error.log:10 |
+| 候选验证 | 不适用 | 未执行：无候选 | 不适用，无本轮计划 | 停止决定 |
+
+"""
+        text = text.replace("## 6. 剩余问题与交接", table + "## 6. 剩余问题与交接")
+        with tempfile.TemporaryDirectory(prefix="ci-report-check-") as directory:
+            path = Path(directory) / "analysis-fix.md"
+            path.write_text(text, encoding="utf-8")
+            args = ("--report", str(path), "--classification", "none", "--checks", "none")
+            code, invalid = self.cli(*args)
+            self.assertEqual(code, 1)
+            error = next(e for e in invalid["errors"] if e["code"] == "checks_none")
+            self.assertEqual(text.splitlines()[error["line"] - 1], table.splitlines()[0])
+            self.assertIn("保持 --checks none", error["message"])
+            self.assertIn("验证计划或执行记录证明参数误传", error["message"])
+            self.assertEqual(path.read_bytes(), text.encode())
+            # Repair the document, not the already-correct requirement. Keep
+            # the original failure evidence and the explanation of no checks.
+            fixed = text.replace(table, "")
+            path.write_text(fixed, encoding="utf-8")
+            code, valid = self.cli(*args)
+            self.assertEqual(code, 0)
+            self.assertEqual(valid["format_status"], "valid")
+            self.assertEqual(valid["sha256"], hashlib.sha256(fixed.encode()).hexdigest())
+            self.assertNotEqual(valid["sha256"], invalid["sha256"])
+            self.assertEqual(path.read_bytes(), fixed.encode())
+            self.assertIn("原始失败：", fixed)
+            self.assertIn("尚未形成验证计划，未运行检查", fixed)
+
     def test_required_but_incomplete_classification(self):
         text = classified().replace("C 编译 / C1 符号解析", "C 编译；小类未确定，未完成")
         text = text.replace("- 最终分类交付：已完成。", "- 最终分类交付：未完成：缺少区分小类的证据。")
         self.assertEqual(self.errors(text, classification="required"), [])
+
+    def test_unrequested_classification_points_to_table_and_repairs_without_flag_change(self):
+        text = classified()
+        errors = [e for e in self.errors(text) if e["code"] == "classification_none"]
+        self.assertEqual(len(errors), 1)
+        header = "| 判断 | 分类路径（标准中的各级编号和名称） | 依据与未确定项 |"
+        self.assertEqual(text.splitlines()[errors[0]["line"] - 1], header)
+        self.assertIn("删除该表", errors[0]["message"])
+        self.assertIn("不要仅为通过检查修改 --classification", errors[0]["message"])
+        # A real corrective action: remove only the conditional table, keeping
+        # the original requirement and all surrounding diagnostic evidence.
+        lines = text.splitlines()
+        start = errors[0]["line"] - 1
+        end = start
+        while end < len(lines) and lines[end].startswith("|"):
+            end += 1
+        fixed = "\n".join(lines[:start] + lines[end:]) + "\n"
+        self.assertEqual(self.errors(fixed, classification="none"), [])
 
     def test_missing_initial_record_is_disclosed_not_fabricated(self):
         text = classified().replace("C 编译；小类未确定", "未知：初始记录缺失")
@@ -352,9 +404,19 @@ class ReportCheckTests(unittest.TestCase):
         self.assertEqual(self.errors(text), [])
 
     def test_planned_unexecuted_checks_still_use_table(self):
-        text = BASE.replace("| passed |", "| 未执行：缺少编译器 |")
+        text = BASE.replace("| passed |", "| 未执行：缺少编译器 |").replace("| match |", "| 未执行：等待构建 |")
+        text = text.replace("编译与清理校验已完成。", "本次已计划编译与清理校验；缺少编译器，两项均未执行。")
         self.assertEqual(self.errors(text), [])
-        self.assertIn("required_table", self.codes(no_checks(BASE)))
+        self.assertIn("required_table", self.codes(no_checks(text), checks="present"))
+        # Here a declared plan really exists: correcting a mistaken flag is
+        # allowed. The structural checker still does not adjudicate that fact.
+        code, invalid = self.cli("--report", "-", "--classification", "none", "--checks", "none", text=text)
+        self.assertEqual(code, 1)
+        self.assertIn("checks_none", {e["code"] for e in invalid["errors"]})
+        code, valid = self.cli("--report", "-", "--classification", "none", "--checks", "present", text=text)
+        self.assertEqual(code, 0)
+        self.assertEqual(valid["format_status"], "valid")
+        self.assertEqual(valid["sha256"], invalid["sha256"])
 
     def test_verification_can_be_split_into_multiple_bound_tables(self):
         text = split_checks()

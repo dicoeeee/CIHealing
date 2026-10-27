@@ -96,6 +96,8 @@ def source_state(files):
 def skill_tool_notice():
     """Native-tool protocol only; no case answers or repair-policy overrides."""
     return ("\n宿主提供原生 Skill 工具：先用 load_skill 加载 ci-self-healing；"
+            "等待加载完整返回，再按入口读取所需前置指南；指南完整返回后才执行依赖它的动作。"
+            "不要把加载或前置指南读取与依赖它们的现场访问放在同一批调用中。"
             "包内资源用 read_skill_resource 按需读取，脚本用 run_skill_script 执行，"
             "不通过文件或 shell 工具直接访问包内资源/脚本。"
             "脚本名保留 scripts/ 前缀，命令行参数按原顺序传入 arguments 数组，cwd 使用实际绝对目录。"

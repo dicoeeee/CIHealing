@@ -195,7 +195,7 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
     grouped = bool(objects)
     if not grouped:
         objects = [0]
-    present = []
+    present, classification_tables = [], []
     for start, end in zip(objects, objects[1:] + [len(failure)]):
         block = failure[start:end]
         if grouped and not block[0].split("失败对象：", 1)[1].strip():
@@ -203,6 +203,7 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
         object_tables = [t for t in parsed[2] if offset + start < t.line <= offset + end]
         matches = require_table(object_tables, model_tables[2][0], required=classification == "required", line=offset + start + 1)
         present.append(bool(matches))
+        classification_tables.extend(matches)
         if len(matches) > 1:
             issue("classification_group", "多个分类对象分别使用失败对象分组。", offset + start + 1)
         for table in matches:
@@ -214,7 +215,11 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
     if classification == "required" and not all(present):
         issue("classification_required", "本次要求分类，每个失败对象均须保留分类记录。", offset + 1)
     elif classification == "none" and any(present):
-        issue("classification_none", "调用声明无分类要求，核对任务要求与报告声明。", offset + 1)
+        for table in classification_tables:
+            issue("classification_none",
+                  "本次无分类要求，但此处保留了分类表。删除该表，保留普通诊断文字；"
+                  "不要仅为通过检查修改 --classification，只有新的可信任务要求才改变此条件。",
+                  table.line)
     elif classification == "mixed" and (not any(present) or all(present)):
         issue("classification_mixed", "mixed 仅用于同时存在有分类要求和无分类要求的对象；标准无法应用不等于无要求。", offset + 1)
 
@@ -225,7 +230,12 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
         if table.header[0] == check_header[0] and table.header != check_header:
             issue("verification_table", "检查表须使用模板的全部列名及顺序。", table.line)
     if checks == "none" and check_tables:
-        issue("checks_none", "调用声明无检查，核对计划和事实后选择 present 或删除不适用的检查表。", check_tables[0].line)
+        issue("checks_none",
+              "--checks none 声明本轮无验证计划、必需检查或实际验证检查，但报告保留了检查表。"
+              "若该声明符合事实，保持 --checks none，删除不适用的检查表并保留未验证说明。"
+              "仅在本轮验证计划或执行记录证明参数误传时纠正 --checks；"
+              "表格存在、原始 Job 结果或后续人工验证建议均不能作为改为 present 的依据。",
+              check_tables[0].line)
     return errors
 
 
@@ -246,7 +256,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", required=True, help="Report file named analysis-fix.md, or - for UTF-8 stdin.")
     parser.add_argument("--classification", required=True, choices=("required", "none", "mixed"), help="Delivery requirement: required even if the Profile cannot be applied; none only if no classification is requested; mixed if only some objects require classification.")
-    parser.add_argument("--checks", required=True, choices=("present", "none"), help="present includes planned but not executed checks.")
+    parser.add_argument("--checks", required=True, choices=("present", "none"),
+                        help="Choose from this invocation's verification plan and execution records, not from table presence. "
+                             "present includes required or planned but unexecuted checks; none only if no checks are required, planned or executed. "
+                             "Original Job results, report-format checks and future human verification suggestions alone do not count.")
     args = parser.parse_args()
     try:
         data = sys.stdin.buffer.read(MAX_BYTES + 1) if args.report == "-" else read_bytes(Path(args.report))

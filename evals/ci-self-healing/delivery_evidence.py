@@ -15,6 +15,230 @@ from repair_support import DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIV
 from skill_execution import audit_execution, options, script_tokens
 
 
+def artifact_checkpoint(events, path, body, script, required_options=None):
+    """Replay native writes/edits and bind checks/readback to final bytes.
+
+    This explicit offline audit does not change the legacy timeout exception.
+    Unknown write mechanisms remain incomplete, never assumed successful.
+    """
+    from manifest_delivery import complete_readback
+    path, sha = str(path), digest(body)
+    calls, content, writes, intervals, checks, readbacks = {}, None, [], [], [], []
+    gaps, invalid, mismatches = [], [], []
+    for event in events:
+        p, seq = event["payload"], event["seq"]
+        if event["kind"] == "InvocationToolCallStart":
+            calls[p["call_id"]] = event
+            continue
+        if event["kind"] != "InvocationToolCallResult" or p.get("call_id") not in calls:
+            continue
+        start = calls[p["call_id"]]
+        args, name = start["payload"].get("args", {}), start["payload"].get("tool_name")
+        reply = p.get("result", "")
+        if args.get("path") == path and name in {"write_file", "edit_file"}:
+            if intervals and start["seq"] <= intervals[-1][1]:
+                gaps.append("overlapping_artifact_writes")
+            intervals.append((start["seq"], seq))
+            if name == "write_file" and isinstance(args.get("content"), str) and isinstance(reply, str) and (
+                    reply.startswith(f"Written {len(args['content'])} chars (") and reply.endswith(f"to {path}.")):
+                content = args["content"]
+                writes.append(seq)
+            elif name == "edit_file" and isinstance(content, str) and isinstance(reply, str) and (
+                    re.fullmatch(r"Replaced [1-9]\d* occurrence\(s\) in " + re.escape(path) + r"\.", reply.strip())):
+                old, new = args.get("old_string"), args.get("new_string")
+                if (not isinstance(old, str) or not old or not isinstance(new, str) or old not in content
+                        or (not args.get("replace_all") and content.count(old) != 1)
+                        or int(reply.split()[1]) != (content.count(old) if args.get("replace_all") else 1)):
+                    gaps.append("artifact_edit_not_replayable")
+                else:
+                    content = content.replace(old, new, -1 if args.get("replace_all") else 1)
+                    writes.append(seq)
+            else:
+                gaps.append("artifact_write_receipt_unconfirmed")
+        if name == "read_file" and args.get("path") == path and isinstance(reply, str):
+            readbacks.append((start["seq"], seq, reply))
+        if name == "run_skill_script" and args.get("skill_name") == SKILL_NAME and args.get("script_name") == script:
+            try:
+                tokens = script_tokens(args)
+                flag = "--report" if script.endswith("report_check.py") else "--manifest"
+                if "--help" in tokens or "-h" in tokens or options(tokens, flag) != [path]:
+                    continue
+                value, end = json.JSONDecoder().raw_decode(reply.lstrip())
+                suffix = reply.lstrip()[end:].strip()
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if not isinstance(value, dict) or value.get("sha256") != sha:
+                continue
+            if any(options(tokens, k) != [v] for k, v in (required_options or {}).items()):
+                mismatches.append(seq)
+            elif value == {"format_status": "valid", "sha256": sha, "errors": []} and not suffix:
+                checks.append((start["seq"], seq))
+            elif value.get("format_status") == "invalid" and suffix in {"", "[exit_code: 1]"}:
+                invalid.append(seq)
+    mutations = [e["seq"] for e in events if "output/" + Path(path).name in e["payload"].get("changed_paths_since_previous_event", [])]
+    if any(not any(a <= seq <= z for a, z in intervals) for seq in mutations):
+        gaps.append("artifact_mutation_not_attributed")
+    final = max(writes + mutations, default=0)
+    reads = [r for r in readbacks if r[0] > final]
+    complete = complete_readback("\n".join(r[2] for r in reads), body) if reads else False
+    valid = [c for c in checks if c[0] > final]
+    if content is None or content.encode() != body or not writes:
+        gaps.append("artifact_final_bytes_not_replayed")
+    if not valid:
+        gaps.append("artifact_final_check_missing")
+        if mismatches:
+            gaps.append("artifact_check_requirement_mismatch")
+    if not complete:
+        gaps.append("artifact_complete_readback_missing")
+    return {"status": "failed" if invalid and not valid else "incomplete" if gaps else "passed",
+            "sha256": sha, "last_mutation_seq": final, "check_sequences": valid,
+            "readback_sequences": [(a, z) for a, z, _ in reads], "complete_readback": complete,
+            "invalid_check_sequences": invalid, "gaps": sorted(set(gaps))}
+
+
+def audit_handoff_events(events, report, *, case_source_path, profile_path, profile_bound, resource_reads,
+                         contract="handoff-evidence-v1"):
+    """Focused native MCP checks; trigger meaning/causality/readability stay semantic.
+
+    The source/profile paths and binding flag are supplied by the trusted test
+    fixture. No natural-language task text is promoted to authorization here.
+    """
+    from handoff_judgment import CONTRACT, pending_judgments
+    if contract not in {"handoff-evidence-v1", CONTRACT}:
+        raise EvalError("unsupported handoff evidence contract")
+    semantic = contract == CONTRACT
+    failures, gaps, calls, searches, originals, attempted = [], [], {}, [], {}, set()
+    observations = {"queries": [], "originals": [], "report_lines": [], "case_literals": [], "time_literals": []}
+    reads = {r["resource"]: r["seq"] for r in reversed(resource_reads) if r.get("complete") is True}
+
+    def fail(check, seq, **details):
+        failures.append({"check": check, "seq": seq, **details})
+
+    previous_search_end = 0
+    messages = []
+    for event in events:
+        p, seq, kind = event["payload"], event["seq"], event["kind"]
+        if kind == "InvocationMessage" and isinstance(p.get("text"), str) and not p.get("presentation"):
+            messages.append((seq, p["text"]))
+        if kind == "InvocationToolCallStart":
+            calls[p["call_id"]] = event
+            args, name = p.get("args", {}), p.get("tool_name")
+            if name == "read_file" and args.get("path") == str(case_source_path):
+                if reads.get("references/case-retrieval.md", seq) >= seq:
+                    fail("case_source_before_complete_guide", seq)
+            if name == "read_file" and args.get("path") == str(profile_path) and profile_bound is False:
+                fail("unbound_profile_read", seq)
+            if name == "cases_search_cases":
+                query = args.get("query")
+                notes = [{"seq": at, "text": text} for at, text in messages if previous_search_end < at < seq]
+                observations["queries"].append({"seq": seq, "evidence_id": event.get("evidence_id"),
+                    "query": query, "preceding_notes": notes,
+                    "literal_query_in_notes": isinstance(query, str) and any(query in n["text"] for n in notes)})
+                if searches and previous_search_end < searches[-1]:
+                    fail("case_search_before_previous_result", seq)
+                if not isinstance(query, str) or not query.strip():
+                    gaps.append("unsupported_case_query_arguments")
+                elif searches:
+                    notes = [text for at, text in messages if previous_search_end < at < seq]
+                    if not notes:
+                        gaps.append("pre_search_note_not_observed")
+                    elif query not in notes[-1] and not semantic:
+                        fail("query_text_differs_from_pre_search_note", seq, query=query)
+                searches.append(seq)
+            elif name == "cases_read_case":
+                if isinstance(args.get("case_id"), str):
+                    attempted.add(args["case_id"])
+                else:
+                    gaps.append("unsupported_original_arguments")
+        elif kind == "InvocationToolCallResult" and p.get("call_id") in calls:
+            call = calls[p["call_id"]]["payload"]
+            if call.get("tool_name") == "cases_search_cases":
+                previous_search_end = seq
+            if call.get("tool_name") != "cases_read_case":
+                continue
+            try:
+                value = json.loads(p.get("result", ""))
+            except (ValueError, TypeError):
+                gaps.append("original_result_unreadable")
+                continue
+            if isinstance(value, dict) and value.get("status") == "ok" and value.get("complete") is True:
+                case_id = call.get("args", {}).get("case_id")
+                if value.get("case_id") != case_id:
+                    fail("original_identity_mismatch", seq)
+                else:
+                    originals.setdefault(case_id, []).append({**value, "_host_observed_at": p.get("observed_at")})
+                    observations["originals"].append({"seq": seq, "evidence_id": event.get("evidence_id"),
+                        "requested_case_id": case_id, "receipt": value, "host_observed_at": p.get("observed_at")})
+    if len(searches) > 3:
+        fail("case_search_budget_exceeded", searches[3])
+    if len(attempted) > 3:
+        fail("case_original_budget_exceeded", 0, count=len(attempted))
+
+    # Only visible prose counts as a nearby citation, never a fenced example.
+    sections, section, fence = {}, None, None
+    for line_number, line in enumerate(report.splitlines(), 1):
+        match = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if match:
+            fence = None if fence == match[1][0] else match[1][0] if fence is None else fence
+            continue
+        if fence:
+            continue
+        match = re.match(r"^## ([1-6])\. ", line)
+        if match:
+            section = int(match[1])
+        elif section:
+            sections.setdefault(section, []).append(line)
+            observations["report_lines"].append({"line": line_number, "section": section, "text": line})
+    intro, citations = "\n".join(sections.get(1, [])), sections.get(6, [])
+    for case_id, values in originals.items():
+        mentions = re.compile(r"(?<!\w)" + re.escape(case_id) + r"(?!\w)")
+        urls = {v.get("url") for v in values if isinstance(v.get("url"), str) and v["url"]}
+        observations["case_literals"].append({"case_id": case_id,
+            "summary_id_present": bool(mentions.search(intro)),
+            "summary_returned_url_literals": sorted(url for url in urls if url in intro),
+            "known_urls": sorted(urls)})
+        if mentions.search(intro) and urls and not any(url in intro for url in urls) and not semantic:
+            fail("case_original_link_missing_in_summary", 0, case_id=case_id)
+        time_column = None
+        for line in citations:
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            headers = [cell.strip(" *`") for cell in cells]
+            if line.lstrip().startswith("|") and "读取时间" in headers:
+                time_column = headers.index("读取时间")
+                continue
+            if not mentions.search(line):
+                continue
+            # Do not mistake a publication/version date for a read timestamp.
+            field = (cells[time_column] if line.lstrip().startswith("|") and time_column is not None and len(cells) > time_column
+                     else line.split("读取时间", 1)[1] if "读取时间" in line else "")
+            times = re.findall(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})", field)
+            # Only explicit observation fields on that original's receipt bind
+            # a time. Publication/update time and run start/deadline do not.
+            known = {v[k] for v in values for k in ("read_at", "observed_at", "_host_observed_at") if isinstance(v.get(k), str)}
+            for stamp in times:
+                from datetime import datetime
+                try:
+                    supported = any(datetime.fromisoformat(stamp.replace("Z", "+00:00")) ==
+                                    datetime.fromisoformat(s.replace("Z", "+00:00")) for s in known)
+                except ValueError:
+                    supported = False
+                observations["time_literals"].append({"case_id": case_id, "text": line, "time": stamp,
+                    "matches_receipt_time": supported, "receipt_times": sorted(known)})
+                if not supported and not semantic:
+                    fail("case_read_time_not_bound_to_original", 0, case_id=case_id, reported_time=stamp)
+    result = {"contract": contract, "status": "failed" if failures else "incomplete" if gaps else "passed",
+            "failures": failures, "gaps": sorted(set(gaps)), "search_count": len(searches),
+            "original_attempt_count": len(attempted), "complete_original_ids": sorted(originals),
+            "semantic_review_required": ["case trigger before source access", "query relevance and note rationale",
+                                         "citation use, non-ISO times and metadata not mechanically matched",
+                                         "root-cause claims across all sections", "actionability and readability"],
+            "coverage": "focused cases_* MCP schema and native read_file paths; not shell interception or universal citation parsing"}
+    if semantic:
+        result.update(observations=observations, pending_judgments=pending_judgments(originals),
+                      status_scope="mechanical facts only; pending semantic judgments do not establish acceptance")
+    return result
+
+
 def reviewable_timeout(run):
     return (run.get("delivery_contract") in DELIVERY_CONTRACTS
             and run.get("status") == "timeout" and run.get("process", {}).get("status") == "timeout"

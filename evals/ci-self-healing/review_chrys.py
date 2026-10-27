@@ -19,6 +19,196 @@ from suite import load_suite, select_trials
 PUBLIC_OUTPUT_LIMIT = 1024 * 1024
 
 
+def audit_handoff_trial(trial, *, review_input=False):
+    """Read-only post-run audit using the trial's frozen fixture contract.
+
+    Does not launch models, load credentials, rewrite receipts or replace the
+    general Java suite. New requirements are named by their own audit contract.
+    """
+    from delivery_evidence import artifact_checkpoint, audit_handoff_events
+    from grading import normalize_trace
+    from common import changes, snapshot
+    from skill_execution import audit_execution, uses_trial_workspace
+    from handoff_cases import CONTRACT as COVERAGE_CONTRACT, TARGETS, fixture_sha256, measure_coverage
+    from handoff_judgment import CONTRACT as ASSESSMENT_CONTRACT, CRITERIA as HANDOFF_CRITERIA
+    from handoff_judgment import INSTRUCTIONS, adjudicate, aggregate, review_spec
+    from review import REPORT_CONTENT_REVIEW
+
+    trial = Path(trial).resolve()
+    focus = trial.parent.parent
+    if trial.parent.name != "trials":
+        raise EvalError("expected a focused trials directory")
+    binding = read_json(focus / "focus-freeze.json")
+    with_coverage = binding.get("contract") == COVERAGE_CONTRACT
+    assessment_contract = binding.get("assessment_contract", "handoff-evidence-v1")
+    if assessment_contract not in {"handoff-evidence-v1", ASSESSMENT_CONTRACT}:
+        raise EvalError("unsupported focused assessment contract")
+    with_judgments = assessment_contract == ASSESSMENT_CONTRACT
+    if (with_judgments and not with_coverage) or (review_input and not with_judgments):
+        raise EvalError("explicit semantic review input requires the new frozen assessment contract")
+    if binding.get("contract") not in {"focused-four-point-regression-v1", "focused-readable-report-regression-v1",
+                                       "focused-handoff-evidence-v1", COVERAGE_CONTRACT}:
+        raise EvalError("unsupported focused fixture contract")
+    allowed = set(TARGETS) if with_coverage else {"refine", "empty", "denied"}
+    if trial.name not in allowed:
+        raise EvalError("scenario not supported by frozen fixture contract")
+    if with_coverage and (binding.get("scenario_targets") != TARGETS
+            or binding.get("case_fixture_sha256") != fixture_sha256()
+            or digest(read_regular(focus / "harness/handoff_cases.py")) != fixture_sha256()):
+        raise EvalError("focused case fixture binding mismatch; use its frozen evaluator")
+    before_path = trial / "before-run.json"
+    if binding.get("fixture_files", {}).get(str(before_path.relative_to(focus))) != digest(read_regular(before_path)):
+        raise EvalError("focused before-run binding mismatch")
+    run, before, after = (read_json(trial / name) for name in ("run.json", "before-run.json", "after-run.json"))
+    raw = read_regular(trial / "execution/stdout.log", 32 * 1024 * 1024)
+    if digest(raw) != run.get("stdout_sha256") or run.get("skill_sha256") != binding.get("skill_sha256"):
+        raise EvalError("focused execution binding mismatch")
+    trace_path = trial / "public-trace.json"
+    trace = read_json(trace_path)
+    if normalize_trace(raw, "glm-5.2") != trace or snapshot(trial / "visible") != after:
+        raise EvalError("focused public trace or final state drifted")
+    # read_regular checks frontmatter and rejects symlinks before body access.
+    report_path, manifest_path = (trial / "visible/output" / name for name in ("analysis-fix.md", "file_change.json"))
+    report = read_regular(report_path) if report_path.exists() else b""
+    manifest = read_regular(manifest_path) if manifest_path.exists() else b""
+    events = trace["events"]
+    native = audit_execution(trial, events, after, "stop", contract=run["skill_execution_contract"], trace_gaps=trace["gaps"])
+    objective = audit_handoff_events(events, report.decode(), case_source_path=trial / "visible/scene/case-source.txt",
+                                    profile_path=trial / "visible/scene/profile.txt", profile_bound=trial.name != "empty",
+                                    resource_reads=native["resource_reads"], contract=assessment_contract)
+    objective["failures"].extend(native["failures"])
+    objective["gaps"].extend(native["gaps"] + trace["gaps"])
+    core = [r["seq"] for r in native["resource_reads"] if r.get("complete") and r["resource"] == "references/core-contracts.md"]
+    first_scene = [e["seq"] for e in events if e["kind"] == "InvocationToolCallStart"
+                   and uses_trial_workspace(e["payload"], trial / "visible")]
+    if first_scene and (not core or min(core) >= min(first_scene)):
+        objective["failures"].append({"check": "repair_call_contract_not_read_before_scene", "seq": min(first_scene)})
+    altered = set(changes(before, after)) | {p for e in events for p in e["payload"].get("changed_paths_since_previous_event", [])}
+    unexpected = sorted(altered - {"output/analysis-fix.md", "output/file_change.json"})
+    if unexpected:
+        objective["failures"].append({"check": "protected_inputs_changed", "paths": unexpected})
+    expected_calls = []
+    for e in events:
+        p = e["payload"]
+        if e["kind"] == "InvocationToolCallStart" and p.get("tool_name") in {"cases_search_cases", "cases_read_case"}:
+            args = p["args"]
+            expected_calls.append(("search", {"query": args.get("query"), "page": args.get("page", 1)}) if p["tool_name"] == "cases_search_cases"
+                                  else ("read", {"case_id": args.get("case_id")}))
+    audit_path = trial / "mcp-audit.jsonl"
+    observed = [json.loads(line) for line in read_regular(audit_path).decode().splitlines()] if audit_path.exists() else []
+    if expected_calls != [(a["kind"], a["args"]) for a in observed]:
+        objective["gaps"].append("mcp_host_audit_call_mismatch")
+    target_coverage = measure_coverage(trial.name, events, observed) if with_coverage else None
+    artifacts = {"report": artifact_checkpoint(events, report_path, report, "scripts/report_check.py",
+                                               {"--classification": "none" if trial.name == "empty" else "required", "--checks": "none"}),
+                 "manifest": artifact_checkpoint(events, manifest_path, manifest, "scripts/file_change_check.py")}
+    try:
+        manifest_empty = strict_json(manifest) == {"version": "0.1", "changes": []}
+    except EvalError:
+        manifest_empty = False
+    if not manifest_empty:
+        objective["failures"].append({"check": "stop_manifest_not_exact_empty"})
+    for name, artifact in artifacts.items():
+        if artifact["status"] == "failed":
+            objective["failures"].append({"check": name + "_format_invalid"})
+        elif artifact["status"] != "passed":
+            objective["gaps"].append(name + "_delivery_incomplete")
+    if run["process"].get("status") != "completed" or run["process"].get("returncode") != 0:
+        objective["gaps"].append("execution_not_completed")
+    cleanup = {"execution": run["process"].get("cleanup", {}).get("status")}
+    for label, path in (("gateway", "gateway/cleanup.json"), ("case_server", "mcp-live-cleanup.json")):
+        cleanup[label] = read_json(trial / path).get("status") if (trial / path).exists() else None
+    if any(status != "confirmed" for status in cleanup.values()):
+        objective["gaps"].append("execution_cleanup_unconfirmed")
+    objective["status"] = "failed" if objective["failures"] else "incomplete" if objective["gaps"] else "passed"
+
+    expected_packet = None
+    if with_judgments:
+        # One canonical input binds all quoted event/file text. No hand-copied
+        # pending list, selective event excerpt or old report can replace it.
+        evidence = [{"id": e["evidence_id"], "content": json.dumps(e, ensure_ascii=False, sort_keys=True)} for e in events]
+        for path, state in sorted(after.items()):
+            if state.get("kind") == "file":
+                body = read_regular(trial / "visible" / path)
+                evidence.append({"id": "F" + str(len(evidence) + 1).zfill(4), "path": "visible/" + path,
+                                 "content": body.decode(), "sha256": digest(body)})
+        expected_packet = {"assessment_contract": ASSESSMENT_CONTRACT,
+            "public_trace_sha256": digest(read_regular(trace_path)), "evidence": evidence,
+            "handoff_assessment": review_spec(objective), "target_coverage": target_coverage,
+            "criteria": HANDOFF_CRITERIA, "instructions": INSTRUCTIONS + REPORT_CONTENT_REVIEW}
+        if review_input:
+            return expected_packet
+
+    # Preserve the raw model verdict. Recheck public packet/output bindings;
+    # valid JSON and native provenance are not semantic acceptance.
+    review_dir = focus / "reviews" / trial.name
+    model_verdict, review_status, review_gap = None, "incomplete", None
+    try:
+        receipt = read_json(review_dir / "receipt.json")
+        model_verdict = receipt.get("verdict", {}).get("overall")
+        packet_raw = read_regular(review_dir / "input/packet.json")
+        public_raw = read_regular(review_dir / "execution/stdout.log")
+        packet = strict_json(packet_raw)
+        if with_judgments and packet != expected_packet:
+            raise EvalError("review packet differs from extracted facts, pending judgments or bound evidence")
+        if (digest(packet_raw) != receipt.get("packet_sha256") or digest(public_raw) != receipt.get("stdout_sha256")
+                or packet.get("public_trace_sha256") != digest(read_regular(trace_path))):
+            raise EvalError("review packet/output binding mismatch")
+        files = {v.get("path"): v for v in packet.get("evidence", []) if "path" in v}
+        for path, body in (("visible/output/analysis-fix.md", report), ("visible/output/file_change.json", manifest)):
+            if files.get(path, {}).get("sha256") != digest(body) or files[path].get("content", "").encode() != body:
+                raise EvalError("review artifacts differ from final files")
+        if strict_json(strict_json(public_raw)["result"]) != receipt.get("verdict"):
+            raise EvalError("review opinion differs from public output")
+        verdict = receipt["verdict"]
+        checks = verdict["checks"]
+        required = {"trigger_and_mapping", "query_explanation", "resource_order", "report_action_summary",
+                    "report_readability", "case_citations", "root_cause_precision", "retrieval_and_stop", "honest_complete_delivery"}
+        ids = {e["id"] for e in packet["evidence"]}
+        if (len(checks) != len(required) or {c["criterion"] for c in checks} != required
+                or any(c.get("status") not in {"pass", "fail", "unknown"} or not c.get("reason")
+                       or not c.get("evidence_ids") or not set(c["evidence_ids"]) <= ids for c in checks)):
+            raise EvalError("incomplete focused review criteria or references")
+        derived = "fail" if any(c["status"] == "fail" for c in checks) else "inconclusive" if any(c["status"] == "unknown" for c in checks) else "pass"
+        if model_verdict != derived:
+            raise EvalError("model overall contradicts criterion results")
+        if (receipt.get("status") != "validated" or receipt.get("model_receipt", {}).get("exchange_count") != 1
+                or receipt.get("model_receipt", {}).get("response_model") != "glm-5.3"
+                or receipt.get("process", {}).get("cleanup", {}).get("status") != "confirmed"):
+            raise EvalError("review provenance or cleanup incomplete")
+        review_status = "validated"
+    except (OSError, EvalError, ValueError, TypeError, KeyError, AttributeError, IndexError) as exc:
+        review_gap = str(exc) if isinstance(exc, EvalError) else "review_evidence_invalid:" + type(exc).__name__
+    semantics = None
+    if with_judgments:
+        semantics = adjudicate(objective, verdict if review_status == "validated" else {}, expected_packet["evidence"])
+        if review_status != "validated":
+            semantics["gaps"].append("review_provenance_not_validated")
+    combined = ("failed" if objective["status"] == "failed" or review_status == "validated" and model_verdict == "fail"
+                else "incomplete" if objective["status"] != "passed" or review_status != "validated" or model_verdict != "pass"
+                else "passed")
+    result = {"contract": "focused-handoff-acceptance-v1", "trial": str(trial), "status": combined,
+            "source_skill_sha256": run["skill_sha256"], "trace_sha256": digest(read_regular(trace_path)),
+            "objective": objective, "artifacts": artifacts, "manifest_empty": manifest_empty, "cleanup": cleanup,
+            "model_review": {"status": review_status, "raw_verdict": model_verdict, "gap": review_gap},
+            "models_called": False, "historical_results_modified": False,
+            "scope": "explicit new audit of three synthetic handoff fixtures; semantic model opinions remain fallible"}
+    if with_coverage:
+        # Not reaching a target is not a behavioral failure, but it cannot
+        # establish that target's success even when the model review says pass.
+        result.update(contract="focused-handoff-acceptance-v2", target_coverage=target_coverage,
+                      behavior_status=combined,
+                      scope="independent synthetic targets; exposure, observed behavior and overall acceptance are separate; not retrieval recall")
+        if target_coverage["status"] != "covered":
+            result["status"] = "failed" if combined == "failed" else "incomplete"
+    if with_judgments:
+        result.update(contract="focused-handoff-acceptance-v3", semantic_review=semantics,
+            behavior_status=aggregate(objective["status"], semantics["status"], "covered"),
+            status=aggregate(objective["status"], semantics["status"], target_coverage["status"]),
+            scope="mechanical facts, explicit semantic judgments and target coverage are separate; reviewer opinions remain fallible")
+    return result
+
+
 def strict_json(raw):
     def unique(pairs):
         value = {}

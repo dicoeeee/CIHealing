@@ -168,7 +168,10 @@ class PacketTests(unittest.TestCase):
         q = project_packet(p)
         clauses = q["events"][1]["payload"]["result"]["verbatim_clauses"]
         self.assertIn("禁止修改 src/main/java", clauses[0]["text"])
-        self.assertTrue(any("repair_admission: stop" in c["text"] for c in clauses))
+        start = body.index("## 判断与行动\n")
+        end = body.index("\n## ", start + 1) + 1
+        decision_clause = next(c for c in clauses if c["heading"] == "判断与行动")
+        self.assertEqual(decision_clause["text"], body[start:end])
         p["deterministic"]["execution_checks"]["resource_reads"][0]["complete"] = False
         self.assertEqual(project_packet(p)["events"], p["events"])
         p["events"] = p["events"][2:]

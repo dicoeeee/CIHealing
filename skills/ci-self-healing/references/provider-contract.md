@@ -56,7 +56,7 @@ provider_observation:
 
 Provider 原生状态名称必须在不丢失原始值的情况下映射。归一化映射不是一对一时，在适配器证据中保留原始状态。
 
-在证据引用旁记录实际获取方式（`local_evidence`、`mcp` 或 `cli`）、来源路径或工具操作、所属运行/Job/重试，以及分页或截断等缺口；混合方式补齐时分别记录。方法表示如何取得证据，不改变原失败的 Provider。访问缺口按[不可用与交付](providers/provider-access.md#不可用与交付)返回诊断流程。
+在证据引用旁记录实际获取方式（`local_evidence`、`mcp` 或 `cli`）、来源路径或工具操作、所属运行/Job/重试，以及分页或截断等缺口；混合方式补齐时分别记录。方法表示如何取得证据，不改变原失败的 Provider。访问缺口按[不可用与交付](providers/provider-access.md#不可用与交付)记录，供诊断判断其影响。
 
 ## 完成与身份规则
 
