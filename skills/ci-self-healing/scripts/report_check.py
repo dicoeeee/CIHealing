@@ -16,6 +16,8 @@ import sys
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "analysis-fix.template.md"
 MAX_BYTES = 2 * 1024 * 1024
+OUTCOMES = ("local_verified", "outer_ci_passed", "repair_advised", "not_applicable", "unresolved")
+SUCCESS_MODES = {"local_verified": "local_verify", "outer_ci_passed": "remote_verify"}
 
 
 @dataclass
@@ -174,6 +176,24 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
         values = {r[0]: r[1].strip("`") for r in metadata[0].rows if len(r) == 2}
         if values.get("请求类型") not in {"仅诊断", "修复"}:
             issue("request_type", "请求类型填写仅诊断或修复。", metadata[0].line)
+        outcomes = [(metadata[0].line + 2 + i, row) for i, row in enumerate(metadata[0].rows)
+                    if row[0] == "处理结果"]
+        if len(outcomes) != 1:
+            issue("outcome_count", "记录信息表必须且只能有一行处理结果；正文说明不能代替该字段。", metadata[0].line)
+        else:
+            outcome_line, row = outcomes[0]
+            # The enum cell is plain text: do not normalize lists, prose or Markdown into a result.
+            outcome = row[1] if len(row) == 2 else None
+            if outcome not in OUTCOMES:
+                issue("outcome_enum", "处理结果只填写一个原样枚举：" + "、".join(OUTCOMES) + "。", outcome_line)
+            else:
+                if values.get("请求类型") == "仅诊断" and outcome not in {"repair_advised", "not_applicable"}:
+                    issue("outcome_request_type", "仅诊断有合格修改方案时填写 repair_advised，否则填写 not_applicable。", outcome_line)
+                if outcome in SUCCESS_MODES:
+                    if values.get("执行模式") != SUCCESS_MODES[outcome]:
+                        issue("outcome_mode", outcome + " 只能对应 " + SUCCESS_MODES[outcome] + "。", outcome_line)
+                    if checks != "present":
+                        issue("outcome_checks", "成功结果要求本次有验证检查，不能同时声明 --checks none。", outcome_line)
     remote = values.get("执行模式") == "remote_verify"
     remote_tables = require_table(parsed[0], model_tables[0][2], required=remote)
     expected_metadata = [t.header for t in model_tables[0][:3 if remote else 2]]

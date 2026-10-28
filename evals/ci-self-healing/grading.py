@@ -9,7 +9,7 @@ from cases import SOURCE_PREFIX, git_metadata
 from common import EvalError, changes, command, digest, json_bytes, read_json, read_regular, snapshot, write_json
 from runtime import load_runtime, probe_build
 from repair_support import RUNTIME_CONTRACT, validate_repair_artifacts
-from repair_support import EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, delivery_contract_matches
+from repair_support import EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACT, delivery_contract_matches, enterprise_outputs_unconfigured
 from skill_execution import audit_execution
 from suite import load_suite, select_trials
 from generation_budget import generation_failure
@@ -135,7 +135,7 @@ def grade_trial(root, row, config):
     if not cleanup_complete(run):
         result["gaps"].append("runtime_resource_cleanup_incomplete")
     if run.get("delivery_contract") in DELIVERY_CONTRACTS:
-        if (run["delivery_contract"] in MANIFEST_DELIVERY_CONTRACTS
+        if (run["delivery_contract"] in EXPLICIT_DELIVERY_CONTRACTS
                 and (not trace["events"] or trace["events"][0]["payload"].get("delivery_contract") != run["delivery_contract"])):
             result["gaps"].append("delivery_contract_mismatch")
         result["delivery_assessment"] = run["delivery_assessment"]
@@ -224,6 +224,12 @@ def grade_trial(root, row, config):
         result["gaps"].extend(manifest_check["gaps"])
         result["failures"].extend({"check": code, "paths": ["output/file_change.json"]}
                                   for code in manifest_check["failures"])
+    if ENTERPRISE_DELIVERY_CONTRACT in {expected_delivery, run.get("delivery_contract")}:
+        unconfigured = enterprise_outputs_unconfigured(root / "skills" / row["version"])
+        result["enterprise_output_check"] = {"status": "not_required" if unconfigured else "not_assessed",
+                                              "scope": "explicit unconfigured binding only; custom files require enterprise validation"}
+        if not unconfigured:
+            result["gaps"].append("enterprise_output_review_required")
     result["status"] = "failed" if result["failures"] else "incomplete" if result["gaps"] else "awaiting_review"
     result["verification"] = verification
     result["report_check"] = report_check
@@ -333,6 +339,7 @@ def summarize(root):
                 delivery_status=(("report_and_manifest_verified" if run.get("delivery_contract") in MANIFEST_DELIVERY_CONTRACTS else "report_format_verified")
                                  if grade and grade.get("report_check", {}).get("status") == "passed" and not reviewable_timeout(run)
                                  and "delivery_contract_mismatch" not in grade.get("gaps", [])
+                                 and "enterprise_output_review_required" not in grade.get("gaps", [])
                                  and (run.get("delivery_contract") not in MANIFEST_DELIVERY_CONTRACTS or grade.get("file_change_check", {}).get("status") == "passed")
                                  else run.get("delivery_assessment", {}).get("status", "unconfirmed")),
                 review_status=(review.get("verdict", {}).get("verdict", "incomplete") if review and review.get("status") == "validated" else "not_reviewed"),

@@ -7,7 +7,7 @@ from common import EvalError
 
 CONTRACT = "handoff-evidence-v2"
 CRITERIA = {
-    "trigger_and_mapping": "停止依据与 HUMAN_FIX / not_eligible 映射是否有证据，检索是否在适用的人工交接分支触发。",
+    "trigger_and_mapping": "停止依据、HUMAN_FIX 等企业标签与最终处理结果的关系是否有证据，并符合本次加载的 Skill 结果规则；检索是否在适用的人工交接分支触发。",
     "query_explanation": "逐次核对查询与当前故障、前次结果的关系，追加前的说明是否支持实际调整；字符串相同不证明相关。",
     "resource_order": "结合实际动作判断依赖资源及读取顺序；未进入的分支不要求读取，硬失败不能被后补说明覆盖。",
     "report_action_summary": "只读第 1 节能否知道故障、处理结果、关键未知和下一步，不能从后文补齐后称摘要已说明。",

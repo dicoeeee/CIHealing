@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import re
 
 from common import EvalError, digest, read_json, read_regular, snapshot
 
@@ -28,8 +29,10 @@ DELIVERY_CONTRACT = "stop-artifact-v1"
 LEGACY_MANIFEST_DELIVERY_CONTRACT = "stop-artifact-v2"
 MANIFEST_DELIVERY_CONTRACT = "stop-artifact-v3"
 MANIFEST_DELIVERY_CONTRACTS = {LEGACY_MANIFEST_DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT}
-DELIVERY_CONTRACTS = {DELIVERY_CONTRACT, *MANIFEST_DELIVERY_CONTRACTS}
-DELIVERY_RESOURCE_DECLARATION = {"schema": "ci-skill-delivery-resources/v1", "contract": MANIFEST_DELIVERY_CONTRACT}
+ENTERPRISE_DELIVERY_CONTRACT = "stop-artifact-v4"
+EXPLICIT_DELIVERY_CONTRACTS = {*MANIFEST_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACT}
+DELIVERY_CONTRACTS = {DELIVERY_CONTRACT, *EXPLICIT_DELIVERY_CONTRACTS}
+DELIVERY_RESOURCE_DECLARATION = {"schema": "ci-skill-delivery-resources/v1", "contract": ENTERPRISE_DELIVERY_CONTRACT}
 
 
 def delivery_contract(skill):
@@ -37,14 +40,68 @@ def delivery_contract(skill):
     skill = Path(skill)
     declaration = skill / "assets/delivery-resources.json"
     if not declaration.exists() and not declaration.is_symlink():
-        if "file_change.json" in read_regular(skill / "SKILL.md").decode():
-            raise EvalError("Skill manifest delivery declaration missing")
+        entry = read_regular(skill / "SKILL.md").decode()
+        if "file_change.json" in entry or "企业输出规范" in entry:
+            raise EvalError("Skill delivery declaration missing")
         return DELIVERY_CONTRACT
     value = read_json(declaration)
     if value not in [{**DELIVERY_RESOURCE_DECLARATION, "contract": version}
-                     for version in MANIFEST_DELIVERY_CONTRACTS]:
+                     for version in EXPLICIT_DELIVERY_CONTRACTS]:
         raise EvalError("unsupported Skill delivery declaration")
     return value["contract"]
+
+
+def enterprise_outputs_unconfigured(skill):
+    """Recognize only the explicit unconfigured row in a frozen v4 package.
+
+    This is not a parser for enterprise Markdown or a verdict on its artifacts.
+    Configured, missing, ambiguous and malformed bindings require separate review.
+    """
+    entry = read_regular(Path(skill) / "SKILL.md").decode()
+    # Only active block headings/rows count. Ambiguous inline HTML requires review.
+    visible, fence, comment = [], None, False
+    for line in entry.splitlines():
+        if fence:
+            if re.fullmatch(r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", line):
+                fence = None
+            continue
+        if comment or re.match(r"^ {0,3}<!--", line):
+            body = line if comment else line.split("<!--", 1)[1]
+            if "<!--" in body:
+                return False
+            _, closed, tail = body.partition("-->")
+            if tail.strip():
+                return False
+            comment = not closed
+            continue
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if opening:
+            fence = opening[1]
+        else:
+            if "<!--" in line or "-->" in line:
+                return False
+            visible.append(line)
+    if fence or comment:
+        return False
+    headings = [i for i, line in enumerate(visible)
+                if re.fullmatch(r" {0,3}### 自定义资源绑定[ \t]*", line)]
+    if len(headings) != 1:
+        return False
+    rows = []
+    for line in visible[headings[0] + 1:]:
+        if re.match(r"^ {0,3}#{1,3}[ \t]+", line):
+            break
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped[1:].split("|")]
+        if cells[0] != "企业输出规范":
+            continue
+        # Unsupported indentation or a partial row is ambiguity, not an absent row.
+        if not re.fullmatch(r" {0,3}\|.*\|[ \t]*", line):
+            return False
+        rows.append(cells[:-1])
+    return rows == [["企业输出规范", "未配置", "未配置"]]
 
 
 def delivery_contract_matches(expected, run):

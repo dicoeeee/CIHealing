@@ -300,11 +300,21 @@ class ManifestDeliveryTests(unittest.TestCase):
 
 
 class DeliveryContractSelectionTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="legacy-manifest-contract-")
+        self.addCleanup(self.tmp.cleanup)
+        self.candidate = Path(self.tmp.name).resolve() / "v3-skill"
+        shutil.copytree(REPO / "skills/ci-self-healing", self.candidate)
+        path = self.candidate / "assets/delivery-resources.json"
+        value = read_json(path)
+        value["contract"] = MANIFEST_DELIVERY_CONTRACT
+        path.write_text(json.dumps(value))
+
     def test_v2_v3_comparison_freezes_both_contracts_without_reinterpreting_v2(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             old_skill = root / "v2-skill"
-            shutil.copytree(REPO / "skills/ci-self-healing", old_skill)
+            shutil.copytree(self.candidate, old_skill)
             declaration = old_skill / "assets/delivery-resources.json"
             value = read_json(declaration)
             value["contract"] = LEGACY_MANIFEST_DELIVERY_CONTRACT
@@ -313,7 +323,7 @@ class DeliveryContractSelectionTests(unittest.TestCase):
             for backend in ("native", "docker"):
                 with self.subTest(backend=backend):
                     suite = root / backend
-                    manifest = prepare(suite, REPO / "skills/ci-self-healing", baseline_dir=old_skill,
+                    manifest = prepare(suite, self.candidate, baseline_dir=old_skill,
                                        repeats=1, mode="compare", case_ids=["case-003"], backend=backend)
                     self.assertEqual(manifest["delivery_contracts"], {
                         "before": LEGACY_MANIFEST_DELIVERY_CONTRACT, "after": MANIFEST_DELIVERY_CONTRACT})
@@ -338,7 +348,7 @@ class DeliveryContractSelectionTests(unittest.TestCase):
             (root / "SKILL.md").write_text("deliver file_change.json")
             with self.assertRaises(EvalError):
                 delivery_contract(root)
-            write_new(root / "assets/delivery-resources.json", read_regular(REPO / "skills/ci-self-healing/assets/delivery-resources.json"))
+            write_new(root / "assets/delivery-resources.json", read_regular(self.candidate / "assets/delivery-resources.json"))
             self.assertEqual(delivery_contract(root), MANIFEST_DELIVERY_CONTRACT)
             (root / "assets/delivery-resources.json").write_text('{"schema":"ci-skill-delivery-resources/v1","contract":"unknown"}')
             with self.assertRaises(EvalError):
@@ -347,7 +357,7 @@ class DeliveryContractSelectionTests(unittest.TestCase):
     def test_suite_freezes_manifest_checker_and_detects_tampering(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve() / "suite"
-            manifest = prepare(root, REPO / "skills/ci-self-healing", repeats=1, mode="single", case_ids=["case-003"])
+            manifest = prepare(root, self.candidate, repeats=1, mode="single", case_ids=["case-003"])
             self.assertEqual(manifest["delivery_contracts"], {"candidate": MANIFEST_DELIVERY_CONTRACT})
             load_suite(root)
             checker = root / "checker/scripts/file_change_check.py"
@@ -361,7 +371,7 @@ class DeliveryContractSelectionTests(unittest.TestCase):
             legacy = root / "legacy"
             write_new(legacy / "SKILL.md", "legacy Skill")
             suite = root / "suite"
-            manifest = prepare(suite, REPO / "skills/ci-self-healing", baseline_dir=legacy,
+            manifest = prepare(suite, self.candidate, baseline_dir=legacy,
                                repeats=1, mode="compare", case_ids=["case-003"])
             contracts = manifest["delivery_contracts"]
             self.assertEqual(contracts, {"before": DELIVERY_CONTRACT, "after": MANIFEST_DELIVERY_CONTRACT})

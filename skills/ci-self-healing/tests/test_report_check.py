@@ -27,6 +27,7 @@ BASE = """# CI 自愈诊断与修复报告
 | invocation_id | example-1 |
 | 请求类型 | 修复 |
 | 执行模式 | local_verify |
+| 处理结果 | local_verified |
 | 绑定 Profile | 未绑定：Skill 未固定，本次调用未指定 |
 | work_dir | /scene |
 | output_dir | /output |
@@ -169,20 +170,106 @@ class ReportCheckTests(unittest.TestCase):
     def test_local_verified_report(self):
         self.assertEqual(self.errors(BASE), [])
 
+    def test_all_five_outcomes_round_trip_through_cli(self):
+        # These are synthetic report inputs, not evidence that an Agent chose the right outcome.
+        advice = ("已核对 src/Example.java 与 MR-1，建议在该文件导入契约指定的类型；"
+                  "本次尚未实施。后续执行 mvn compile 及类型解析回归测试，"
+                  "预期均通过且保持 MR-1 的行为；这些检查尚未执行。")
+        scenarios = (
+            ("local_verified", "local_verify", "修复", "本地必要验证通过。", "present"),
+            ("outer_ci_passed", "remote_verify", "修复", "准确候选远端必要验证通过。", "present"),
+            ("repair_advised", "local_verify", "修复", "策略禁止本轮写入，但允许建议。" + advice, "none"),
+            ("repair_advised", "不适用：仅诊断", "仅诊断", advice, "none"),
+            ("not_applicable", "local_verify", "修复", "必要授权被拒，未形成明确修改方案。", "none"),
+            ("not_applicable", "不适用：仅诊断", "仅诊断", "仅完成诊断，未形成明确修改方案。", "none"),
+            ("unresolved", "local_verify", "修复", "目标行为未明，预算耗尽，未形成明确修改方案。", "none"),
+            ("unresolved", "remote_verify", "修复", "本地检查通过，远端仍未完成，未形成明确修改方案。", "present"),
+        )
+        for outcome, mode, request, reason, checks in scenarios:
+            with self.subTest(outcome=outcome, mode=mode, request=request):
+                text = BASE if checks == "present" else no_changes(no_checks(BASE))
+                text = text.replace("local_verified", outcome)
+                text = text.replace("| 执行模式 | local_verify |", f"| 执行模式 | {mode} |")
+                text = text.replace("| 请求类型 | 修复 |", f"| 请求类型 | {request} |")
+                text = text.replace("本地编译和适用检查通过；未执行外层流水线。", reason)
+                if mode == "remote_verify":
+                    text = text.replace("## 1. 处理结论", REMOTE + "## 1. 处理结论")
+                if request == "仅诊断":
+                    text = text.replace("example-1", "不适用：仅诊断").replace("digest-example", "不适用：无候选")
+                code, receipt = self.cli("--report", "-", "--classification", "none", "--checks", checks, text=text)
+                self.assertEqual((code, receipt["format_status"], receipt["errors"]), (0, "valid", []))
+                self.assertEqual(receipt["sha256"], hashlib.sha256(text.encode()).hexdigest())
+
+    def test_outcome_must_appear_once_in_metadata_not_only_body(self):
+        row = "| 处理结果 | local_verified |\n"
+        for replacement in ("", "<!-- " + row.rstrip() + " -->\n",
+                            row + row, row + "| 处理结果 | unresolved |\n"):
+            with self.subTest(replacement=replacement):
+                text = BASE.replace(row, replacement)
+                self.assertIn("outcome_count", self.codes(text))
+        relocated = BASE.replace(row, "").replace("## 1. 处理结论\n", "## 1. 处理结论\n\n| 字段 | 内容 |\n| --- | --- |\n" + row)
+        self.assertIn("outcome_count", self.codes(relocated))
+
+    def test_outcome_rejects_legacy_unknown_multiple_and_decorated_values(self):
+        for value in ("not_eligible", "denied", "inconclusive", "no_progress", "invented_outcome",
+                      "", "未知", "不适用", "LOCAL_VERIFIED", "local_verified / unresolved",
+                      "local_verified,unresolved", "[local_verified]", "`local_verified`",
+                      "local_verified（已修复）", "{{REPORT:处理结果}}"):
+            with self.subTest(value=value):
+                text = BASE.replace("| 处理结果 | local_verified |", f"| 处理结果 | {value} |")
+                errors = [e for e in self.errors(text) if e["code"] == "outcome_enum"]
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(text.splitlines()[errors[0]["line"] - 1], f"| 处理结果 | {value} |")
+
+    def test_success_outcome_requires_matching_mode_and_repair_request(self):
+        for outcome, mode in (("local_verified", "remote_verify"), ("outer_ci_passed", "local_verify"),
+                              ("local_verified", "不适用：尚未确定"), ("outer_ci_passed", "unknown")):
+            with self.subTest(outcome=outcome, mode=mode):
+                text = BASE.replace("local_verified", outcome).replace("| 执行模式 | local_verify |", f"| 执行模式 | {mode} |")
+                if mode == "remote_verify":
+                    text = text.replace("## 1. 处理结论", REMOTE + "## 1. 处理结论")
+                self.assertIn("outcome_mode", self.codes(text))
+        for outcome in ("local_verified", "outer_ci_passed", "unresolved"):
+            with self.subTest(readonly_outcome=outcome):
+                text = BASE.replace("local_verified", outcome).replace("| 请求类型 | 修复 |", "| 请求类型 | 仅诊断 |")
+                self.assertIn("outcome_request_type", self.codes(text))
+
+    def test_success_cannot_declare_no_verification_checks(self):
+        for outcome, mode in (("local_verified", "local_verify"), ("outer_ci_passed", "remote_verify")):
+            with self.subTest(outcome=outcome):
+                text = no_checks(BASE).replace("local_verified", outcome)
+                text = text.replace("| 执行模式 | local_verify |", f"| 执行模式 | {mode} |")
+                if mode == "remote_verify":
+                    text = text.replace("## 1. 处理结论", REMOTE + "## 1. 处理结论")
+                self.assertIn("outcome_checks", self.codes(text, checks="none"))
+
+    def test_invalid_outcome_cli_is_readonly_and_returns_invalid(self):
+        text = BASE.replace("| 处理结果 | local_verified |", "| 处理结果 | no_progress |")
+        with tempfile.TemporaryDirectory(prefix="ci-report-outcome-") as directory:
+            path = Path(directory) / "analysis-fix.md"
+            path.write_text(text, encoding="utf-8")
+            before = path.read_bytes()
+            code, receipt = self.cli("--report", str(path), "--classification", "none", "--checks", "present")
+            self.assertEqual((code, receipt["format_status"]), (1, "invalid"))
+            self.assertIn("outcome_enum", {e["code"] for e in receipt["errors"]})
+            self.assertEqual(receipt["sha256"], hashlib.sha256(before).hexdigest())
+            self.assertEqual(path.read_bytes(), before)
+
     def test_readonly_no_repair_identity_or_checks(self):
         text = no_changes(no_checks(BASE)).replace("| 请求类型 | 修复 |", "| 请求类型 | 仅诊断 |")
         text = text.replace("| 执行模式 | local_verify |", "| 执行模式 | 不适用：仅诊断 |")
         text = text.replace("example-1", "不适用：仅诊断").replace("digest-example", "不适用：未创建候选")
-        text = text.replace("local_verified", "仅诊断，未执行修复")
+        text = text.replace("local_verified", "not_applicable")
+        text = text.replace("本地编译和适用检查通过；未执行外层流水线。", "仅诊断，未执行修复；本次未形成明确修改方案。")
         self.assertEqual(self.errors(text, checks="none"), [])
 
     def test_stop_before_candidate(self):
-        text = no_changes(no_checks(BASE)).replace("local_verified", "inconclusive")
+        text = no_changes(no_checks(BASE)).replace("local_verified", "unresolved")
         text = text.replace("实际编辑前宿主记录 admission-1。", "stop；方向未决，见 admission-1。")
         self.assertEqual(self.errors(text, checks="none"), [])
 
     def test_stop_report_removes_inapplicable_checks_without_changing_requirement(self):
-        text = no_changes(no_checks(BASE)).replace("local_verified", "denied")
+        text = no_changes(no_checks(BASE)).replace("local_verified", "not_applicable")
         text = text.replace("本地编译和适用检查通过；未执行外层流水线。", "策略要求转人工，本轮无验证计划或实际验证。")
         table = """| 检查或命令 | 执行位置/目录或运行身份 | 结果 | 覆盖范围与未覆盖内容 | 证据 |
 | --- | --- | --- | --- | --- |
@@ -302,7 +389,7 @@ class ReportCheckTests(unittest.TestCase):
         self.assertEqual(self.errors(text), [])
 
     def test_case_advice_preserves_prior_repair_failure_and_cleanup(self):
-        text = BASE.replace("local_verified", "inconclusive")
+        text = BASE.replace("local_verified", "unresolved")
         text = text.replace("本地编译和适用检查通过；未执行外层流水线。",
                             "候选编译失败后已恢复；现场材料不足以确认 SDK 兼容范围，转案例建议，本轮不再实施修复。")
         text = text.replace("缺少导入；参见 src/Example.java:2 和 MR-1 的契约说明。",
@@ -341,7 +428,7 @@ class ReportCheckTests(unittest.TestCase):
         text = no_changes(no_checks(BASE)).replace("| 请求类型 | 修复 |", "| 请求类型 | 仅诊断 |")
         text = text.replace("| 执行模式 | local_verify |", "| 执行模式 | 不适用：仅诊断 |")
         text = text.replace("example-1", "不适用：仅诊断").replace("digest-example", "不适用：未创建候选")
-        text = text.replace("local_verified", "仅诊断，转案例建议，未执行修复")
+        text = text.replace("local_verified", "not_applicable")
         text = text.replace("本地编译和适用检查通过；未执行外层流水线。", "已查日志、源码及 MR，仍缺 SDK 兼容性依据；本轮只交付建议。")
         text = text.replace("缺少导入；参见 src/Example.java:2 和 MR-1 的契约说明。", "类型缺失机制尚未确认，仍缺 SDK 版本约束。")
         text = text.replace("补充导入，保持契约。", "建议先核对 SDK 版本与迁移说明，条件确认后再考虑调整依赖；尚未实施。")
@@ -404,7 +491,7 @@ class ReportCheckTests(unittest.TestCase):
         self.assertEqual(self.errors(text), [])
 
     def test_planned_unexecuted_checks_still_use_table(self):
-        text = BASE.replace("| passed |", "| 未执行：缺少编译器 |").replace("| match |", "| 未执行：等待构建 |")
+        text = BASE.replace("local_verified", "unresolved").replace("| passed |", "| 未执行：缺少编译器 |").replace("| match |", "| 未执行：等待构建 |")
         text = text.replace("编译与清理校验已完成。", "本次已计划编译与清理校验；缺少编译器，两项均未执行。")
         self.assertEqual(self.errors(text), [])
         self.assertIn("required_table", self.codes(no_checks(text), checks="present"))
@@ -527,11 +614,11 @@ class ReportCheckTests(unittest.TestCase):
 
     def test_final_report_check_and_readback_can_share_one_readonly_batch(self):
         # Conditions come from the task; each completed report passes on first check.
-        stop = no_changes(no_checks(BASE)).replace("local_verified", "inconclusive")
+        stop = no_changes(no_checks(BASE)).replace("local_verified", "unresolved")
         required_stop = classified(stop).replace("C 编译 / C1 符号解析", "未应用标准：入口不可读")
         remote = BASE.replace("local_verify", "remote_verify").replace("local_verified", "outer_ci_passed")
         remote = remote.replace("## 1. 处理结论", REMOTE + "## 1. 处理结论")
-        planned = BASE.replace("| passed |", "| 未执行：缺少编译器 |")
+        planned = BASE.replace("local_verified", "unresolved").replace("| passed |", "| 未执行：缺少编译器 |")
         for text, classification, checks in ((stop, "none", "none"), (required_stop, "required", "none"),
                                               (planned, "none", "present"), (remote, "none", "present")):
             with self.subTest(classification=classification, checks=checks), tempfile.TemporaryDirectory() as directory:

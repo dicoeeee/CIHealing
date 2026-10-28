@@ -1,6 +1,7 @@
 """Synthetic lifecycle tests; no model calls and no historical result rewrites."""
 import copy
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -13,7 +14,7 @@ from common import changes, digest, json_bytes, read_json, read_regular, snapsho
 from delivery_evidence import artifact_checkpoint, audit_handoff_events, assess_delivery, readonly_shell, reviewable_timeout
 from generation_budget import generation_failure
 from grading import combined_status, grade_trial, normalize_trace
-from repair_support import DELIVERY_CONTRACT, EXECUTION_CONTRACT, RUNTIME_CONTRACT, session_receipt, source_state
+from repair_support import DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT, ENTERPRISE_DELIVERY_CONTRACT, EXECUTION_CONTRACT, RUNTIME_CONTRACT, session_receipt, source_state
 from review import make_packet
 from suite import REPO, prepare, bundle_hash, LEGACY_CHECKER_FILES
 from test_eval import STOP_REPORT, encode_trace
@@ -24,8 +25,18 @@ class DeliveryEvidenceTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix="stop-delivery-")
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve() / "suite"
-        manifest = prepare(self.root, REPO / "skills/ci-self-healing", repeats=1, mode="single", case_ids=["case-003"], backend="native")
-        if not getattr(self, "manifest_delivery", False):
+        source = REPO / "skills/ci-self-healing"
+        selected = getattr(self, "fixture_contract", MANIFEST_DELIVERY_CONTRACT if getattr(self, "manifest_delivery", False) else None)
+        if selected is not None:
+            # Explicit historical fixtures must not inherit the live package's new contract.
+            source = Path(self.tmp.name).resolve() / "fixture-skill"
+            shutil.copytree(REPO / "skills/ci-self-healing", source)
+            declaration = read_json(source / "assets/delivery-resources.json")
+            declaration["contract"] = selected
+            (source / "assets/delivery-resources.json").write_text(json.dumps(declaration))
+        self.bound_contract = selected or DELIVERY_CONTRACT
+        manifest = prepare(self.root, source, repeats=1, mode="single", case_ids=["case-003"], backend="native")
+        if selected is None:
             # This fixture exercises historical stop-artifact-v1 receipts. Keep
             # its suite envelope at the original two-file checker contract.
             manifest.pop("delivery_contracts", None)
@@ -42,7 +53,7 @@ class DeliveryEvidenceTests(unittest.TestCase):
         write_json(self.root / "runtime-binding.json", {"synthetic": True})
         write_new(self.trial / "adapter/task.txt", "synthetic task")
         self.events = []
-        self.event("observer.started", {"runtime_contract": RUNTIME_CONTRACT, "delivery_contract": DELIVERY_CONTRACT, "clock_id": "clock-test"})
+        self.event("observer.started", {"runtime_contract": RUNTIME_CONTRACT, "delivery_contract": self.bound_contract, "clock_id": "clock-test"})
         self.event("observer.skill_registration", {"confirmed": True})
         skill = self.trial / "runtime/skills/ci-self-healing"
         body = read_regular(REPO / "skills/ci-self-healing/SKILL.md")
@@ -81,7 +92,7 @@ class DeliveryEvidenceTests(unittest.TestCase):
         gateway = [{"schema": "ci-gateway-event-v1", **binding, "seq": i, "monotonic_ns": ns,
                     "request_id": rid, "kind": kind, **fields} for i, (kind, rid, ns, fields) in enumerate(raw, 1)]
         self.run = {"status": "timeout", "backend": "native", "runtime_contract": RUNTIME_CONTRACT,
-                    "delivery_contract": DELIVERY_CONTRACT, "skill_execution_contract": EXECUTION_CONTRACT,
+                    "delivery_contract": self.bound_contract, "skill_execution_contract": EXECUTION_CONTRACT,
                     "expected_model_id": "glm-5.2", "filesystem_status": "captured", "isolation_confirmed": True,
                     "gateway_cleanup_confirmed": True, "task_sha256": digest(b"synthetic task"),
                     "session_receipt_sha256": digest(read_regular(self.trial / "session-receipt.json")),

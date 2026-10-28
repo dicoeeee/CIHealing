@@ -6,7 +6,7 @@ import re
 import subprocess
 import uuid
 
-from repair_support import delivery_contract, MANIFEST_DELIVERY_CONTRACTS
+from repair_support import delivery_contract, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS
 from cases import CASES, git_environment, git_metadata, materialize
 from common import EvalError, command, digest, json_bytes, markdown_allowed, read_checked_stream, read_json, read_regular, snapshot, write_json, write_new
 
@@ -139,7 +139,7 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
                 "skills": {label: bundle_hash(files) for label, files in bundles.items()},
                 "report_contract": "v1", "checker_sha256": bundle_hash(checker),
                 "trials": records}
-    if MANIFEST_DELIVERY_CONTRACTS.intersection(deliveries.values()):
+    if EXPLICIT_DELIVERY_CONTRACTS.intersection(deliveries.values()):
         manifest.update(delivery_contracts=deliveries, checker_files=list(checker))
     write_json(output / "suite.json", manifest)
     return manifest
@@ -173,9 +173,11 @@ def load_suite(root):
         actual = {label: delivery_contract(root / "skills" / label) for label in manifest["skills"]}
         if manifest["delivery_contracts"] != actual:
             raise EvalError("frozen Skill delivery contract changed")
-        expected = [*LEGACY_CHECKER_FILES, MANIFEST_CHECKER_FILE]
-        if not MANIFEST_DELIVERY_CONTRACTS.intersection(actual.values()) or checker_files != expected:
-            raise EvalError("invalid manifest checker contract")
+        expected = list(LEGACY_CHECKER_FILES)
+        if MANIFEST_DELIVERY_CONTRACTS.intersection(actual.values()):
+            expected.append(MANIFEST_CHECKER_FILE)
+        if not EXPLICIT_DELIVERY_CONTRACTS.intersection(actual.values()) or checker_files != expected:
+            raise EvalError("invalid delivery checker contract")
     elif checker_files != list(LEGACY_CHECKER_FILES):
         raise EvalError("unsupported checker files")
     checker = {name: read_regular(root / "checker" / name) for name in checker_files}
