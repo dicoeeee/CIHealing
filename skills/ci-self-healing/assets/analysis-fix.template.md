@@ -4,25 +4,19 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| invocation_id | {{REPORT:调用身份或不适用及原因}} |
-| 请求类型 | {{REPORT:仅诊断或修复}} |
-| 执行模式 | {{REPORT:local_verify或remote_verify或不适用及原因}} |
-| 处理结果 | {{REPORT:local_verified或outer_ci_passed或repair_advised或not_applicable或unresolved中的唯一枚举}} |
+| invocation_id | {{REPORT:调用身份或未知及原因}} |
+| 请求类型 | {{REPORT:修复}} |
+| 执行模式 | {{REPORT:local_verify}} |
+| 处理结果 | {{REPORT:local_verified或repair_advised或unresolved中的唯一枚举}} |
 | 绑定 Profile | {{REPORT:实际分类Profile标识版本及绑定来源或未绑定未应用标准及原因}} |
-| work_dir | {{REPORT:实际现场绝对路径或不适用及原因}} |
-| output_dir | {{REPORT:实际输出绝对路径或不适用及原因或无效输入说明}} |
+| work_dir | {{REPORT:实际现场绝对路径或无效输入说明}} |
+| output_dir | {{REPORT:实际输出绝对路径或无效输入说明}} |
 
 **仓库与候选**
 
 | 仓库 | 工作空间绝对路径 | baseline_sha | 候选 fingerprint |
 | --- | --- | --- | --- |
 | {{REPORT:仓库标识}} | {{REPORT:源码路径}} | {{REPORT:基线或未知及原因}} | {{REPORT:候选指纹或不适用及原因}} |
-
-**远端运行**
-
-| 仓库/候选 | 专用 ref | 候选 SHA | 触发方式 | Provider 运行身份 | 最近观察时间 |
-| --- | --- | --- | --- | --- | --- |
-| {{REPORT:绑定仓库及候选}} | {{REPORT:实际ref或未创建及原因}} | {{REPORT:实际SHA或未知及原因}} | {{REPORT:触发方式或未触发及原因}} | {{REPORT:运行身份或未知及原因}} | {{REPORT:实际观察时间或未观察及原因}} |
 
 ## 1. 处理结论
 

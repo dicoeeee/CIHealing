@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 from common import EvalError, read_json, write_json, write_new
 from grading import grade_trial
 from delivery_evidence import assess_delivery
-from repair_support import (ENTERPRISE_DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT,
+from repair_support import (ENTERPRISE_DELIVERY_CONTRACT, PIPELINE_DELIVERY_CONTRACT, MANIFEST_DELIVERY_CONTRACT,
                             delivery_contract, delivery_contract_matches, enterprise_outputs_unconfigured)
 from suite import REPO, LEGACY_CHECKER_FILES, load_suite, prepare
 import test_delivery_evidence as fixtures
@@ -123,9 +123,9 @@ class EnterpriseBindingTests(unittest.TestCase):
                 (self.root / "SKILL.md").write_text(marker + "markdown\n" + prefix + row + "\n" + marker + "\n")
                 self.assertFalse(enterprise_outputs_unconfigured(self.root))
 
-    def test_current_package_declares_v4_and_cannot_silently_fall_back(self):
+    def test_current_package_declares_v6_and_cannot_silently_fall_back(self):
         source = REPO / "skills/ci-self-healing"
-        self.assertEqual(delivery_contract(source), ENTERPRISE_DELIVERY_CONTRACT)
+        self.assertEqual(delivery_contract(source), PIPELINE_DELIVERY_CONTRACT)
         self.assertTrue(enterprise_outputs_unconfigured(source))
         shutil.copytree(source, self.root / "skill")
         (self.root / "skill/assets/delivery-resources.json").unlink()
@@ -162,7 +162,7 @@ class EnterpriseBindingTests(unittest.TestCase):
                 (self.root / "SKILL.md").write_text(prefix + row + "\n" + indent + configured + "\n")
                 self.assertFalse(enterprise_outputs_unconfigured(self.root))
 
-    def test_v3_v4_comparison_preserves_v3_checker_without_forcing_it_on_v4(self):
+    def test_v3_v6_comparison_preserves_v3_checker_without_forcing_it_on_v6(self):
         legacy = self.root / "v3"
         shutil.copytree(REPO / "skills/ci-self-healing", legacy)
         declaration = legacy / "assets/delivery-resources.json"
@@ -173,7 +173,7 @@ class EnterpriseBindingTests(unittest.TestCase):
         manifest = prepare(output, REPO / "skills/ci-self-healing", baseline_dir=legacy,
                            repeats=1, mode="compare", case_ids=["case-003"], backend="native")
         self.assertEqual(manifest["delivery_contracts"], {"before": MANIFEST_DELIVERY_CONTRACT,
-                                                        "after": ENTERPRISE_DELIVERY_CONTRACT})
+                                                        "after": PIPELINE_DELIVERY_CONTRACT})
         self.assertTrue((output / "checker/scripts/file_change_check.py").exists())
         self.assertEqual(load_suite(output), manifest)
 

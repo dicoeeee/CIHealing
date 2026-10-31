@@ -27,13 +27,12 @@ class DeliveryEvidenceTests(unittest.TestCase):
         self.root = Path(self.tmp.name).resolve() / "suite"
         source = REPO / "skills/ci-self-healing"
         selected = getattr(self, "fixture_contract", MANIFEST_DELIVERY_CONTRACT if getattr(self, "manifest_delivery", False) else None)
-        if selected is not None:
-            # Explicit historical fixtures must not inherit the live package's new contract.
-            source = Path(self.tmp.name).resolve() / "fixture-skill"
-            shutil.copytree(REPO / "skills/ci-self-healing", source)
-            declaration = read_json(source / "assets/delivery-resources.json")
-            declaration["contract"] = selected
-            (source / "assets/delivery-resources.json").write_text(json.dumps(declaration))
+        # Explicit historical fixtures must not inherit the live package's new contract.
+        source = Path(self.tmp.name).resolve() / "fixture-skill"
+        shutil.copytree(REPO / "skills/ci-self-healing", source)
+        declaration = read_json(source / "assets/delivery-resources.json")
+        declaration["contract"] = selected or ENTERPRISE_DELIVERY_CONTRACT
+        (source / "assets/delivery-resources.json").write_text(json.dumps(declaration))
         self.bound_contract = selected or DELIVERY_CONTRACT
         manifest = prepare(self.root, source, repeats=1, mode="single", case_ids=["case-003"], backend="native")
         if selected is None:

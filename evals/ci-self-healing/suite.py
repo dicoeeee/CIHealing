@@ -6,8 +6,8 @@ import re
 import subprocess
 import uuid
 
-from repair_support import delivery_contract, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS
-from cases import CASES, git_environment, git_metadata, materialize
+from repair_support import delivery_contract, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS, PIPELINE_REPORT_VERSIONS
+from cases import default_cases, CASES, git_environment, git_metadata, materialize
 from common import EvalError, command, digest, json_bytes, markdown_allowed, read_checked_stream, read_json, read_regular, snapshot, write_json, write_new
 
 
@@ -16,6 +16,39 @@ REPO = ROOT.parents[1]
 SCHEMA = "ci-skill-eval-v1"
 LEGACY_CHECKER_FILES = ("scripts/report_check.py", "assets/analysis-fix.template.md")
 MANIFEST_CHECKER_FILE = "scripts/file_change_check.py"
+
+
+def report_versions(deliveries):
+    return {label: PIPELINE_REPORT_VERSIONS.get(contract, "v1")
+            for label, contract in deliveries.items()}
+
+
+def checker_sources(deliveries):
+    """Host-owned contracts; a candidate cannot replace its own grading rules."""
+    reports = report_versions(deliveries)
+    versioned = any(v != "v1" for v in reports.values())
+    sources = {}
+    for version in sorted(set(reports.values())):
+        prefix = "report-" + version + "/" if versioned else ""
+        for name in LEGACY_CHECKER_FILES:
+            sources[prefix + name] = ROOT / "contracts" / version / name
+    if MANIFEST_DELIVERY_CONTRACTS.intersection(deliveries.values()):
+        sources[MANIFEST_CHECKER_FILE] = ROOT / "contracts/file-change-v1" / MANIFEST_CHECKER_FILE
+    return sources
+
+
+def report_checker(root, row):
+    root = Path(root)
+    suite = read_json(root / "suite.json")
+    actual = report_versions({row["version"]: delivery_contract(root / "skills" / row["version"])})[row["version"]]
+    versions = suite.get("report_contracts")
+    if versions is None:
+        if actual != "v1" or suite.get("report_contract") != "v1":
+            raise EvalError("missing versioned report contract")
+        return root / "checker/scripts/report_check.py"
+    if suite.get("report_contract") != "per-version-v1" or versions.get(row["version"]) != actual:
+        raise EvalError("report contract does not match frozen Skill")
+    return root / "checker" / ("report-" + actual) / "scripts/report_check.py"
 
 
 def runtime_path(name):
@@ -95,7 +128,7 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
     after = skill_from_dir(candidate)
     if mode not in {"single", "compare"}:
         raise EvalError("mode must be single or compare")
-    selected = list(CASES) if case_ids is None else list(case_ids)
+    selected = default_cases() if case_ids is None else list(case_ids)
     if not selected or len(set(selected)) != len(selected) or any(c not in CASES for c in selected):
         raise EvalError("unknown, empty or duplicate case selection")
     revision = None
@@ -113,12 +146,10 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
     # proposed Skill. Contract migrations must be reviewed as evaluator changes.
     deliveries = {label: delivery_contract(output / "skills" / label) for label in bundles}
     checker = {}
-    for name in LEGACY_CHECKER_FILES:
-        checker[name] = read_regular(ROOT / "contracts/v1" / name)
+    reports = report_versions(deliveries)
+    for name, source in checker_sources(deliveries).items():
+        checker[name] = read_regular(source)
         write_new(output / "checker" / name, checker[name])
-    if MANIFEST_DELIVERY_CONTRACTS.intersection(deliveries.values()):
-        checker[MANIFEST_CHECKER_FILE] = read_regular(ROOT / "contracts/file-change-v1" / MANIFEST_CHECKER_FILE)
-        write_new(output / "checker" / MANIFEST_CHECKER_FILE, checker[MANIFEST_CHECKER_FILE])
     jobs = [(case, label, index + 1) for case in selected for label in bundles for index in range(repeats)]
     random.Random(seed).shuffle(jobs)
     records = []
@@ -141,6 +172,8 @@ def prepare(output, candidate, baseline_ref="HEAD", baseline_dir=None, repeats=3
                 "trials": records}
     if EXPLICIT_DELIVERY_CONTRACTS.intersection(deliveries.values()):
         manifest.update(delivery_contracts=deliveries, checker_files=list(checker))
+    if any(v != "v1" for v in reports.values()):
+        manifest.update(report_contract="per-version-v1", report_contracts=reports)
     write_json(output / "suite.json", manifest)
     return manifest
 
@@ -169,20 +202,27 @@ def load_suite(root):
         if label not in {"before", "after", "candidate"} or bundle_hash(skill_from_dir(root / "skills" / label)) != wanted:
             raise EvalError("Skill snapshot changed after preparation")
     checker_files = manifest.get("checker_files", list(LEGACY_CHECKER_FILES))
+    actual = {label: delivery_contract(root / "skills" / label) for label in manifest["skills"]}
+    reports = report_versions(actual)
+    if any(v != "v1" for v in reports.values()):
+        if manifest.get("report_contracts") != reports or manifest.get("report_contract") != "per-version-v1":
+            raise EvalError("invalid versioned report contract")
+    elif "report_contracts" in manifest or manifest.get("report_contract") != "v1":
+        raise EvalError("invalid legacy report contract")
     if "delivery_contracts" in manifest:
-        actual = {label: delivery_contract(root / "skills" / label) for label in manifest["skills"]}
         if manifest["delivery_contracts"] != actual:
             raise EvalError("frozen Skill delivery contract changed")
-        expected = list(LEGACY_CHECKER_FILES)
-        if MANIFEST_DELIVERY_CONTRACTS.intersection(actual.values()):
-            expected.append(MANIFEST_CHECKER_FILE)
+        expected = list(checker_sources(actual))
         if not EXPLICIT_DELIVERY_CONTRACTS.intersection(actual.values()) or checker_files != expected:
             raise EvalError("invalid delivery checker contract")
-    elif checker_files != list(LEGACY_CHECKER_FILES):
+    elif any(v != "v1" for v in reports.values()) or checker_files != list(LEGACY_CHECKER_FILES):
         raise EvalError("unsupported checker files")
     checker = {name: read_regular(root / "checker" / name) for name in checker_files}
     if bundle_hash(checker) != manifest["checker_sha256"]:
         raise EvalError("fixed report checker changed")
+    for name, source in checker_sources(actual).items():
+        if name in checker and checker[name] != read_regular(source):
+            raise EvalError("checker differs from its host report contract")
     return manifest
 
 

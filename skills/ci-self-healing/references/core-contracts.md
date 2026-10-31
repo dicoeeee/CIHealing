@@ -11,13 +11,13 @@
 | Git、命令和 CI 事实 | 工具或 Provider 观察 | 记录来源和 `observed_at` |
 | 诊断与下一步行动决策 | AI 评估 | 绑定证据引用，并在相关内容漂移后重新计算 |
 | 工作流实时进度 | 外部 Harness 或 Provider | 按需轮询、订阅、持久化并重新调用 Skill |
-| 修复成功 | 当前有效准入与验证收据 | 区分检查事实与修复结论，遵循 [结果判定](repair-and-verification.md#结果判定) |
+| 修复成功 | 当前有效准入与验证收据 | 区分检查事实与修复结论，遵循 [完整成功条件](repair-and-verification.md#完整成功条件) |
 
 `diagnosing`、`candidate_prepared`、`local_verifying` 或 `awaiting_outer_ci` 等临时标签可以作为进度事件，但不是持久化业务结果。
 
 ## Healing Request
 
-以下合同用于修复调用；只读任务不要求建立修复身份，但最终报告同样按[结果判定](repair-and-verification.md#结果判定)填写唯一处理结果，有合格修改方案时为 `repair_advised`，否则为 `not_applicable`。报告输出参数仍按[调用参数解析](invocation-inputs.md)使用。失败事实与诊断记录定义在[建立失败合同](diagnosis-and-repair.md#建立失败合同)。
+以下合同用于修复调用；只读任务不建立修复身份。修复成果按[完整成功条件](repair-and-verification.md#完整成功条件)判断；仅双参数流水线修复需要按[结果判定](repair-and-verification.md#结果判定)填写正式报告的唯一处理结果。其他调用交付已有事实、限制和下一步。输入按[调用参数解析](invocation-inputs.md)使用，失败事实与诊断记录见[建立失败合同](diagnosis-and-repair.md#建立失败合同)。
 
 ```yaml
 healing_request:
@@ -68,7 +68,7 @@ healing_request:
 
 只有完整候选进入验证时才开始计数一个 Attempt。临时插桩、聚焦实验、日志收集、假设细化、询问用户和移交本身不增加 `index`。
 
-记录第一个满足完整成功条件的候选、已有有效策略与证据、必要动作限制及剩余预算，供主入口判断是否继续。成功条件与其他结果含义见[结果判定](repair-and-verification.md#结果判定)；本合同不另设候选循环或调用结束出口。
+记录第一个满足完整成功条件的候选、已有有效策略与证据、必要动作限制及剩余预算，供主入口判断是否继续。修复成功条件见[完整成功条件](repair-and-verification.md#完整成功条件)；本合同不另设候选循环或调用结束出口。
 
 ## Attempt 记录
 
@@ -122,7 +122,7 @@ repository
 
 HEAD 漂移、候选漂移、策略漂移、相关环境漂移、目标行为的相关变化或企业知识包漂移，会使受影响的决策和收据失效。应重新观察并计算，不要沿用过期的通过结果。跨调用引用旧收据时，保留原调用身份并核对其对当前基线、候选、环境和验证要求的适用性；不把旧结果改写成本次实际执行。
 
-协作时读取 [交互与移交](collaboration.md#交互与移交)，该处集中定义行为和交接内容。修复结果的唯一判定口径见 [结果判定](repair-and-verification.md#结果判定)。
+协作时读取 [交互与移交](collaboration.md#交互与移交)，该处集中定义行为和交接内容。修复结果的唯一判定口径见 [完整成功条件](repair-and-verification.md#完整成功条件)。
 
 ## 可选的学习输出
 

@@ -16,8 +16,7 @@ import sys
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "analysis-fix.template.md"
 MAX_BYTES = 2 * 1024 * 1024
-OUTCOMES = ("local_verified", "outer_ci_passed", "repair_advised", "not_applicable", "unresolved")
-SUCCESS_MODES = {"local_verified": "local_verify", "outer_ci_passed": "remote_verify"}
+OUTCOMES = ("local_verified", "repair_advised", "unresolved")
 
 
 @dataclass
@@ -131,7 +130,7 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
     source, template_errors = visible_lines(template)
     model = section_blocks(source)
     model_tables = [tables(block, offset)[0] for offset, block in model]
-    if template_errors or len(model) != 7 or [len(t) for t in model_tables] != [3, 0, 1, 0, 1, 1, 0]:
+    if template_errors or len(model) != 7 or [len(t) for t in model_tables] != [2, 0, 1, 0, 1, 1, 0]:
         raise CheckUnavailable("包内模板结构不可用。")
     lines, errors = visible_lines(text)
 
@@ -174,8 +173,10 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
         if len(set(actual_fields)) != len(actual_fields):
             issue("metadata_duplicate", "记录信息字段不能重复。", metadata[0].line)
         values = {r[0]: r[1].strip("`") for r in metadata[0].rows if len(r) == 2}
-        if values.get("请求类型") not in {"仅诊断", "修复"}:
-            issue("request_type", "请求类型填写仅诊断或修复。", metadata[0].line)
+        if values.get("请求类型") != "修复":
+            issue("outcome_request_type", "本报告仅用于双参数流水线内修复，请求类型须为修复。", metadata[0].line)
+        if values.get("执行模式") != "local_verify":
+            issue("outcome_mode", "流水线内修复报告的执行模式须为 local_verify。", metadata[0].line)
         outcomes = [(metadata[0].line + 2 + i, row) for i, row in enumerate(metadata[0].rows)
                     if row[0] == "处理结果"]
         if len(outcomes) != 1:
@@ -187,20 +188,12 @@ def validate(text: str, template: str, classification: str, checks: str) -> list
             if outcome not in OUTCOMES:
                 issue("outcome_enum", "处理结果只填写一个原样枚举：" + "、".join(OUTCOMES) + "。", outcome_line)
             else:
-                if values.get("请求类型") == "仅诊断" and outcome not in {"repair_advised", "not_applicable"}:
-                    issue("outcome_request_type", "仅诊断有合格修改方案时填写 repair_advised，否则填写 not_applicable。", outcome_line)
-                if outcome in SUCCESS_MODES:
-                    if values.get("执行模式") != SUCCESS_MODES[outcome]:
-                        issue("outcome_mode", outcome + " 只能对应 " + SUCCESS_MODES[outcome] + "。", outcome_line)
+                if outcome == "local_verified":
                     if checks != "present":
                         issue("outcome_checks", "成功结果要求本次有验证检查，不能同时声明 --checks none。", outcome_line)
-    remote = values.get("执行模式") == "remote_verify"
-    remote_tables = require_table(parsed[0], model_tables[0][2], required=remote)
-    expected_metadata = [t.header for t in model_tables[0][:3 if remote else 2]]
+    expected_metadata = [t.header for t in model_tables[0]]
     if [t.header for t in parsed[0]] != expected_metadata:
-        issue("metadata_layout", "记录区按模板排列记录信息、仓库与候选，以及适用的远端运行表。")
-    if not remote and remote_tables:
-        issue("remote_table", "非 remote_verify 模式删除远端运行表，原始 CI 证据写入第 2 节。", remote_tables[0].line)
+        issue("metadata_layout", "记录区按模板排列记录信息、仓库与候选；原始 CI 证据写入第 2 节。")
 
     raw_lines = text.splitlines()
     for offset, block in blocks[1:]:

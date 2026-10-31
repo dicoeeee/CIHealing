@@ -15,13 +15,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from cases import CASES, SOURCES, materialize, oracle
+from cases import default_cases, CASES, SOURCES, materialize, oracle
 from chrys_observer import Recorder, headless_result
 from common import EvalError, digest, json_bytes, read_checked_stream, read_json, read_regular, run_logged, snapshot, write_json, write_new
 from grading import CRITERIA, candidate_head, combined_status, final_state_checks, grade, normalize_trace, summarize
 from review import make_packet, review, validate_verdict
 from runtime import container_base, docker_probe, load_runtime, mount
-from suite import REPO, bundle_hash, load_suite, prepare, skill_from_dir
+from suite import REPO, bundle_hash, load_suite, prepare, skill_from_dir, report_checker
 
 
 def trace_rows():
@@ -157,7 +157,7 @@ class EvalTests(unittest.TestCase):
         out = self.base / "suite"
         result = prepare(out, after, baseline_dir=before, repeats=1)
         self.assertEqual(len(result["trials"]), 6)
-        self.assertEqual({(r["case"], r["version"]) for r in result["trials"]}, {(c, v) for c in CASES for v in ("before", "after")})
+        self.assertEqual({(r["case"], r["version"]) for r in result["trials"]}, {(c, v) for c in default_cases() for v in ("before", "after")})
         for row in result["trials"]:
             visible = out / "trials" / row["id"] / "visible"
             prompt = (visible / "task.txt").read_text()
@@ -188,8 +188,8 @@ class EvalTests(unittest.TestCase):
     def test_candidate_checker_cannot_weaken_external_contract(self):
         before, after = self.skills()
         (after / "scripts/report_check.py").write_text("print('always pass')")
-        prepare(self.base / "suite", after, baseline_dir=before, repeats=1)
-        self.assertEqual(read_regular(self.base / "suite/checker/scripts/report_check.py"), read_regular(ROOT / "contracts/v1/scripts/report_check.py"))
+        manifest = prepare(self.base / "suite", after, baseline_dir=before, repeats=1)
+        self.assertEqual(read_regular(report_checker(self.base / "suite", next(row for row in manifest["trials"] if row["version"] == "after"))), read_regular(ROOT / "contracts/v1/scripts/report_check.py"))
 
     def test_restricted_frontmatter_stops_before_body_read(self):
         class GuardedStream(io.BytesIO):
@@ -505,7 +505,8 @@ class EvalTests(unittest.TestCase):
 
     def test_make_packet_keeps_all_files_and_events_above_old_budget(self):
         root = self.base / "packet-unit"
-        row = {"id": "trial-111111111111", "case": "case-002", "expected": "extend_contract"}
+        row = {"id": "trial-111111111111", "case": "case-002", "expected": "extend_contract", "version": "candidate"}
+        write_json(root / "suite.json", {"report_contract": "v1"})
         trial = root / "trials" / row["id"]
         text = "完整证据\n" * 23000
         write_new(trial / "visible/scene/evidence.txt", text)

@@ -49,7 +49,7 @@ reviewed: false
 
 ### 2. 选择本次需要的配置项
 
-只读取所选项的详细模板与对应执行规则。以下五项分别配置，不从 Provider 名称推导分类，不把分类或案例中的建议当作修复授权。企业 `HUMAN_FIX` / `AI_FIX` 标签、修复准入与最终结果按[统一术语](references/diagnosis-and-repair.md#术语与映射)分别记录；转人工检索失败不阻塞交付、不恢复自愈，也不覆盖已确认的范围/策略事实。最终结果按完整成功、明确修改建议、已确认不适用、其余未解决的顺序选择。
+只读取所选项的详细模板与对应执行规则。以下五项分别配置，不从 Provider 名称推导分类，不把分类或案例中的建议当作修复授权。企业 `HUMAN_FIX` / `AI_FIX` 标签、修复准入与最终结果按[统一术语](references/diagnosis-and-repair.md#术语与映射)分别记录；转人工检索失败不阻塞交付、不恢复自愈，也不覆盖已确认的范围/策略事实。最终结果按各自完整成立条件选择，人工介入或命中案例本身不决定结果码。
 
 | 配置项 | 配置动作与最小内容 | 按需参考 |
 | --- | --- | --- |
@@ -129,13 +129,13 @@ work_dir: /path/to/failure-scene
 output_dir: /path/to/healing-output
 ~~~
 
-以上为双目录 CI Job 场景；仅诊断请求不会因双参数获得修复权限。未提供 `output_dir` 时在宿主消息中交付标准报告；提供有效目录时生成 `analysis-fix.md`。企业文件只按固定规范的各自路径生成，路径明确的文件不受报告目录参数缺省影响。其他调用和验证模式按 [SKILL.md](SKILL.md) 选择。
+以上为双目录 CI Job 修复场景，此时按六章模板生成 `analysis-fix.md`；参数已提供但无效或报告无法落盘时，用同结构完整正文披露缺口。仅诊断、单参数、无参数或通用远端调用用普通回复，不自动生成正式报告。企业文件仍按固定规范的各自路径生成，不受正式报告是否适用影响。
 
-所有报告在记录信息表中强制填写唯一“处理结果”：`local_verified`、`outer_ci_passed`、`repair_advised`、`not_applicable` 或 `unresolved`。枚举含义、互斥顺序和明确修改建议门槛统一见[结果判定](references/repair-and-verification.md#结果判定)，字段与校验规则见[报告规范](references/result-report.md#固定结构)；仅诊断同样填写，但不建立修复身份。
+流水线内修复报告在记录信息表中填写唯一“处理结果”：`local_verified`、`repair_advised` 或 `unresolved`。`repair_advised` 表示修法有据、方案已交付但本次仍有必要工作未完成，可由人工实施已确定的调整；需人工补齐决定修法的信息、或判断相似案例应如何适配时，方案尚未确定，归入 `unresolved`。明确禁修、超出范围或尝试失败且无明确方案也归入 `unresolved`，正文分别说明原因；已有明确方案仍为 `repair_advised`，禁令保持。信息缺失只是未解决的可能原因之一。具体条件见[结果判定](references/repair-and-verification.md#结果判定)，报告范围见[输出适配](references/output-delivery.md#报告适用范围)。
 
 ## 企业输出文件如何配置
 
-通用版本的企业输出规范绑定为“未配置”，只交付标准报告。`file_change.json` 已改为企业示例，不是所有企业的默认必交文件；原字段与生成规则完整收在[企业输出规范填写说明](docs/enterprise-output-specification.md#file_changejson-示例)。
+通用版本的企业输出规范绑定为“未配置”，按调用范围交付正式报告或普通结论，无额外企业文件。`file_change.json` 已改为企业示例，不是所有企业的默认必交文件；原字段与生成规则完整收在[企业输出规范填写说明](docs/enterprise-output-specification.md#file_changejson-示例)。
 
 配置由企业/产品维护者完成，运行时 Agent 不选择规范或输出目录：
 
@@ -144,7 +144,7 @@ output_dir: /path/to/healing-output
 3. 核对路径与权限、同名文件归属和工作空间检查范围。标准报告仍由 `output_dir` 决定；企业文件可以基于 `work_dir`、`output_dir` 或已授权固定目录，缺少必要参数时不得自行换目录。
 4. 用脱敏样例验证有数据、无数据、未知数据、路径缺口、校验失败和部分文件交付；涉及跨文件依赖时，再验证报告就绪后检查、报告更新后重查及循环依赖缺口。按[适配层](references/output-delivery.md#生成校验与读回)验收实际行为。
 
-运行分层是 `SKILL.md → output-delivery.md → 固定企业输出规范`。通用适配层管理读取、路径、安全写入、逐项生成、检查和完整读回；具体字段与目录只由企业规范定义。标准报告的文件名、六章结构、五种结果语义和唯一“处理结果”字段保持共用。
+运行分层是 `SKILL.md → output-delivery.md → 固定企业输出规范`。通用适配层管理读取、路径、安全写入、逐项生成、检查和完整读回；具体字段与目录只由企业规范定义。标准报告的文件名、六章结构、流水线报告三种结果语义和唯一“处理结果”字段保持共用。
 
 标准报告第 6 节呈现文件交付记录；完成条件及其与修复结果的关系统一见[交付完成与修复结果](references/output-delivery.md#交付完成与修复结果)。
 
@@ -158,4 +158,4 @@ output_dir: /path/to/healing-output
 python3 -B -m unittest discover -s tests -v
 ~~~
 
-通用 `quick_validate.py` 的字段白名单不包含现有 `arguments` 扩展；不要为消除该兼容性提示删除双参数接口。修改执行资源布局时，还需核对 [资源合同声明](assets/execution-resources.json)、宿主执行审计与评审摘录映射，保留历史合同及证据。当前 [交付合同声明](assets/delivery-resources.json) 使用企业可配置输出的 v4 规则：未配置企业规范时按标准报告验收，不强制清单；已有 v1/v2/v3 冻结合同仍按原规则评测。通用评测器可验证未配置时的报告交付；已绑定企业规范的额外文件需企业宿主或独立评审核对，不将未知企业要求自动判为完成。README 和配置参考属于维护文档，不新增运行时必读资源。
+通用 `quick_validate.py` 的字段白名单不包含现有 `arguments` 扩展；不要为消除该兼容性提示删除双参数接口。修改执行资源布局时，还需核对 [资源合同声明](assets/execution-resources.json)、宿主执行审计与评审摘录映射，保留历史合同及证据。当前 [交付合同声明](assets/delivery-resources.json) 使用 v6：双参数流水线报告采用三结果合同；企业文件独立按固定规范交付。评测器按每个冻结 Skill 版本绑定 v1、v2 或 v3 报告校验器，旧交付合同和历史证据保留原规则。通用评测器可验证未配置时的报告交付；已绑定企业规范的额外文件需企业宿主或独立评审核对，不将未知企业要求自动判为完成。README 和配置参考属于维护文档，不新增运行时必读资源。

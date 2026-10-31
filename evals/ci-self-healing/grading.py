@@ -9,9 +9,9 @@ from cases import SOURCE_PREFIX, git_metadata
 from common import EvalError, changes, command, digest, json_bytes, read_json, read_regular, snapshot, write_json
 from runtime import load_runtime, probe_build
 from repair_support import RUNTIME_CONTRACT, validate_repair_artifacts
-from repair_support import EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACT, delivery_contract_matches, enterprise_outputs_unconfigured
+from repair_support import EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACTS, delivery_contract_matches, enterprise_outputs_unconfigured
 from skill_execution import audit_execution
-from suite import load_suite, select_trials
+from suite import load_suite, select_trials, report_checker
 from generation_budget import generation_failure
 from delivery_evidence import reviewable_timeout
 from resource_cleanup import cleanup_complete, cleanup_bindings
@@ -205,7 +205,7 @@ def grade_trial(root, row, config):
         candidates = ["present"] if row["expected"] != "stop" else ["present", "none"]
         attempts = []
         for checks in candidates:
-            check = subprocess_run([sys.executable, "-B", str(root / "checker/scripts/report_check.py"),
+            check = subprocess_run([sys.executable, "-B", str(report_checker(root, row)),
                                     "--report", str(report_path), "--classification", "none", "--checks", checks],
                                    capture_output=True, timeout=10)
             attempts.append({"checks": checks, "exit_code": check.returncode, "output": check.stdout.decode()})
@@ -224,7 +224,7 @@ def grade_trial(root, row, config):
         result["gaps"].extend(manifest_check["gaps"])
         result["failures"].extend({"check": code, "paths": ["output/file_change.json"]}
                                   for code in manifest_check["failures"])
-    if ENTERPRISE_DELIVERY_CONTRACT in {expected_delivery, run.get("delivery_contract")}:
+    if ENTERPRISE_DELIVERY_CONTRACTS.intersection({expected_delivery, run.get("delivery_contract")}):
         unconfigured = enterprise_outputs_unconfigured(root / "skills" / row["version"])
         result["enterprise_output_check"] = {"status": "not_required" if unconfigured else "not_assessed",
                                               "scope": "explicit unconfigured binding only; custom files require enterprise validation"}

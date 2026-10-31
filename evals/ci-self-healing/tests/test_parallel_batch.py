@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from batch import execute_batch, load_config, make_plan, stage_paths
+from batch import execute_batch, load_config, make_plan, new_run, stage_paths
 from common import (BudgetExhausted, EvalError, bind_json, read_json, remaining_timeout,
                     run_logged, snapshot, wall_budget, write_json)
 from suite import load_suite
@@ -23,7 +23,16 @@ class ParallelBatchTests(BatchFixture, unittest.TestCase):
         self.config['max_parallel_trials'] = 3
 
     def test_three_distinct_trials_overlap_but_each_trial_keeps_stage_order(self):
-        barriers = {s: threading.Barrier(3) for s in ('run', 'grade', 'review')}
+        self.assert_overlapping_trials(3)
+
+    def test_four_distinct_trials_overlap_with_eight_reserved_starts(self):
+        self.assert_overlapping_trials(4)
+
+    def assert_overlapping_trials(self, width):
+        self.config['max_parallel_trials'] = width
+        self.config['max_agent_invocations'] = width * 2
+        cases = ['case-001', 'case-002', 'case-003', 'outcome-advised'][:width]
+        barriers = {s: threading.Barrier(width) for s in ('run', 'grade', 'review')}
         lock = threading.Lock()
         active, peak, observed = set(), {}, []
 
@@ -49,20 +58,20 @@ class ParallelBatchTests(BatchFixture, unittest.TestCase):
             self.assertFalse(active, 'summary must never read an in-flight artifact')
             return original_report(*args)
 
-        root = self.create()
+        root = new_run(self.config, make_plan(self.config, self.candidate, case_ids=cases))
         with mock.patch('batch.run_trials', side_effect=wrap('run', self.fake_run)), \
              mock.patch('batch.grade', side_effect=wrap('grade', self.grade)), \
              mock.patch('batch.native_review', side_effect=wrap('review', self.review)), \
              mock.patch('batch.write_reports', side_effect=stable_report):
             result = execute_batch(root, self.config)
-        self.assertEqual(result['counts']['candidate']['passed'], 3, result.get('batch_stop_reason'))
-        self.assertEqual(peak, {'run': 3, 'grade': 3, 'review': 3})
+        self.assertEqual(result['counts']['candidate']['passed'], width, result.get('batch_stop_reason'))
+        self.assertEqual(peak, {'run': width, 'grade': width, 'review': width})
         for row in result['trials']:
             self.assertEqual([s for tid, s in observed if tid == row['id']], ['run', 'grade', 'review'])
         starts = [read_json(p) for p in (root / 'journal').glob('*/*.started.json')]
-        self.assertEqual(sorted(r['agent_invocation_ordinal'] for r in starts if 'agent_invocation_ordinal' in r), list(range(1, 7)))
-        self.assertEqual({r['max_parallel_trials'] for r in starts}, {3})
-        self.assertEqual(result['reserved_agent_invocations'], 6)
+        self.assertEqual(sorted(r['agent_invocation_ordinal'] for r in starts if 'agent_invocation_ordinal' in r), list(range(1, width * 2 + 1)))
+        self.assertEqual({r['max_parallel_trials'] for r in starts}, {width})
+        self.assertEqual(result['reserved_agent_invocations'], width * 2)
         before = list(self.calls)
         self.assertEqual(execute_batch(root, self.config)['exit_code'], 0)
         self.assertEqual(before, self.calls)
@@ -243,7 +252,9 @@ class ParallelBatchTests(BatchFixture, unittest.TestCase):
             self.assertEqual(plan['maximum_agent_invocations'], 6)
             self.assertEqual(plan['max_parallel_trials'], 3)
             self.assertFalse(plan['models_called'])
-            for value in (0, 4, True, 1.5, '3'):
+            path.write_text(json.dumps({**config, 'max_parallel_trials': 4}))
+            self.assertEqual(make_plan(load_config(path), self.candidate)['max_parallel_trials'], 4)
+            for value in (0, 5, True, 1.5, '3'):
                 path.write_text(json.dumps({**config, 'max_parallel_trials': value}))
                 with self.subTest(value=value), self.assertRaises(EvalError):
                     load_config(path)

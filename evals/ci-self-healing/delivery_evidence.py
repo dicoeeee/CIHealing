@@ -11,7 +11,7 @@ import shlex
 from common import EvalError, changes, digest, json_bytes, read_json, read_regular, snapshot
 from generation_budget import generation_failure
 from gateway_evidence import cancellation_time, gateway_failure
-from repair_support import DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACT, enterprise_outputs_unconfigured, SKILL_NAME, source_state
+from repair_support import DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACTS, enterprise_outputs_unconfigured, SKILL_NAME, source_state
 from skill_execution import audit_execution, options, script_tokens
 
 
@@ -291,7 +291,7 @@ def assess_delivery(trial, run):
 
 def _assess(trial, run, result):
     from grading import normalize_trace  # Runtime import avoids module cycle.
-    if run["delivery_contract"] == ENTERPRISE_DELIVERY_CONTRACT:
+    if run["delivery_contract"] in ENTERPRISE_DELIVERY_CONTRACTS:
         suite = read_json(trial.parent.parent / "suite.json")
         rows = [row for row in suite["trials"] if row["id"] == trial.name]
         if len(rows) != 1 or rows[0]["version"] not in {"before", "after", "candidate"}:

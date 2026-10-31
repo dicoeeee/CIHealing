@@ -64,10 +64,19 @@ class FreezeTests(unittest.TestCase):
     def test_invalid_limits_do_not_create_partial_freeze(self):
         output = self.root / 'runs/invalid'
         for kw in ({'repair_timeout_seconds': 0}, {'repair_timeout_seconds': True}, {'repair_timeout_seconds': 1801},
-                   {'max_parallel_trials': 4}, {'max_parallel_trials': False}):
+                   {'max_parallel_trials': 5}, {'max_parallel_trials': False}):
             with self.subTest(kw=kw), self.assertRaises(EvalError):
                 freeze(self.previous, output, **kw)
             self.assertFalse(output.exists())
+
+    def test_explicit_four_workers_preserves_budget_and_prior_freeze(self):
+        output = self.root / 'runs/four-workers'
+        freeze(self.previous, output, max_parallel_trials=4)
+        config = read_json(output / 'snapshot/config/batch.json')
+        self.assertEqual(config['max_parallel_trials'], 4)
+        self.assertEqual(config['max_agent_invocations'], self.config['max_agent_invocations'])
+        self.assertEqual(config['max_wall_seconds'], self.config['max_wall_seconds'])
+        self.assertEqual(snapshot(self.previous, skip_git=False), self.before)
 
 
 if __name__ == '__main__':

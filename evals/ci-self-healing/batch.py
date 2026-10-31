@@ -20,7 +20,7 @@ from threading import Event, Lock
 
 from common import (BudgetExhausted, EvalError, digest, json_bytes, read_json, read_regular,
                     replace_json, remaining_timeout, wall_budget, write_json)
-from cases import CASES
+from cases import default_cases, CASES
 from grading import grade, summarize, validate_grade_binding
 from native_runner import load_native, native_identity, native_preflight, native_review
 from runtime import docker_probe, runtime_probe, load_runtime, run_trials
@@ -49,7 +49,7 @@ def load_config(path):
     if value["backend"] == "docker" and not re.fullmatch(r"[A-Za-z0-9_.-]+", value.get("docker_context", "")):
         raise EvalError("invalid Docker context")
     for key, default, cap in (("max_agent_invocations", 36, 200), ("max_wall_seconds", 14400, 86400),
-                               ("stop_after_transport_errors", 2, 10), ("max_parallel_trials", 3, 3)):
+                               ("stop_after_transport_errors", 2, 10), ("max_parallel_trials", 3, 4)):
         # Legacy threshold remains parseable for local configs, but the typed
         # failure policy below supersedes counting arbitrary nonzero exits.
         value.setdefault(key, default)
@@ -66,7 +66,7 @@ def engine_digest():
 def make_plan(config, candidate, mode="single", preset="smoke", baseline_ref="HEAD", case_ids=None):
     if mode not in {"single", "compare"} or preset not in {"smoke", "regression"}:
         raise EvalError("unknown mode or preset")
-    cases = list(CASES) if case_ids is None else list(case_ids)
+    cases = default_cases() if case_ids is None else list(case_ids)
     if not cases or len(cases) != len(set(cases)) or any(c not in CASES for c in cases):
         raise EvalError("unknown, duplicate or empty case selection")
     repeats = 1 if preset == "smoke" else 3
@@ -335,7 +335,7 @@ def execute_waves(root, config, descriptor, runtime, identity, segment, stop):
     shared summaries or advancing any trial; partial JSON is never scored.
     """
     limit = config.get("max_parallel_trials", 1)
-    if type(limit) is not int or not 1 <= limit <= 3:
+    if type(limit) is not int or not 1 <= limit <= 4:
         raise EvalError("invalid max_parallel_trials")
     rows = load_suite(root / "suite")["trials"]
     reserved = sum(1 for p in (root / "journal").glob("*/*.started.json")
