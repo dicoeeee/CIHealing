@@ -68,33 +68,53 @@ async def check_skills(profile_dir, agent):
             "run_skill_script": True, "script_nonzero_exit": True}
 
 
-async def check_read_file():
+async def check_read_file(function=None):
     """Exercise the selected runtime's argument validator and full report read.
 
     No model, profiles or user files. Stringified line_range caused two real
     pre-dispatch failures; never coerce such arguments in the adapter.
     """
-    from chrys.foundation.models.session_env import SessionEnvironment
-    from chrys.service.tools.builtins.filesystem import FilesystemTools
-    function = next((t for t in FilesystemTools(SessionEnvironment.capture()).tools()
-                     if t.name == "read_file"), None)
+    if function is None:
+        from chrys.foundation.models.session_env import SessionEnvironment
+        from chrys.service.tools.builtins.filesystem import FilesystemTools
+        function = next((t for t in FilesystemTools(SessionEnvironment.capture()).tools()
+                         if t.name == "read_file"), None)
     if not callable(getattr(function, "invoke", None)):
         raise EvalError("native read_file validator unavailable")
+    properties = function.parameters().get("properties", {})
+    if "line_range" in properties:
+        pagination = "line_range"
+        full = {"line_range": [1, -1], "max_tokens": 1000}
+        partial = {"line_range": [2, 2]}
+        invalid = [{"line_range": "[1, 20]"}]
+    elif {"offset", "limit"} <= properties.keys():
+        pagination = "offset_limit"
+        full = {"offset": 1, "limit": 3, "max_tokens": 1000}
+        partial = {"offset": 2, "limit": 1}
+        invalid = [{"offset": 0}, {"limit": 0}, {"offset": "invalid"}]
+    else:
+        raise EvalError("native read_file pagination capability unavailable")
     with tempfile.TemporaryDirectory(prefix="ci-eval-readback-") as temp:
         report = Path(temp) / "analysis-fix.md"
-        report.write_text("CI_EVAL_REPORT_START\nCI_EVAL_REPORT_END\n")
-        for extra in ({}, {"line_range": [1, -1], "max_tokens": 1000}):
+        report.write_text("CI_EVAL_REPORT_START\nCI_EVAL_REPORT_MIDDLE\nCI_EVAL_REPORT_END\n")
+        for extra in ({}, full):
             value = await function.invoke(arguments={"path": str(report), **extra}, skip_parsing=True)
             if not isinstance(value, str) or any(marker not in value for marker in ("CI_EVAL_REPORT_START", "CI_EVAL_REPORT_END")):
                 raise EvalError("native read_file incomplete synthetic report readback")
-        try:
-            await function.invoke(arguments={"path": str(report), "line_range": "[1, 20]"}, skip_parsing=True)
-        except TypeError as exc:
-            if "Invalid arguments" not in str(exc):
-                raise EvalError("native read_file failed outside argument validation") from None
-        else:
-            raise EvalError("native read_file accepted stringified line_range")
-    return {"full_readback": True, "array_line_range": True, "string_line_range_rejected": True, "model_calls": 0}
+        value = await function.invoke(arguments={"path": str(report), **partial}, skip_parsing=True)
+        if (not isinstance(value, str) or "CI_EVAL_REPORT_MIDDLE" not in value
+                or "CI_EVAL_REPORT_START" in value or "CI_EVAL_REPORT_END" in value):
+            raise EvalError("native read_file ignored pagination")
+        for extra in invalid:
+            try:
+                await function.invoke(arguments={"path": str(report), **extra}, skip_parsing=True)
+            except TypeError as exc:
+                if "Invalid arguments" not in str(exc):
+                    raise EvalError("native read_file failed outside argument validation") from None
+            else:
+                raise EvalError("native read_file accepted invalid pagination")
+    return {"full_readback": True, "pagination": pagination, "partial_readback": True,
+            "invalid_pagination_rejected": True, "model_calls": 0}
 
 
 async def check_search():

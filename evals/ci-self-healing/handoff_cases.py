@@ -168,8 +168,15 @@ def measure_coverage(scenario, events, audit):
             "boundary": "Exposure only; no production recall, semantic adoption or safety verdict inferred."}
 
 
-def prepare_cases(output, skill_source, git="git"):
+def prepare_cases(output, skill_source, git="git", case_suite="handoff", case_ids=None):
     """Create fresh offline scenes and freeze their Skill/service; never execute them."""
+    if case_suite == "keyword":
+        from keyword_cases import prepare
+        return prepare(output, skill_source, case_ids=case_ids)
+    if case_ids is not None:
+        raise ValueError("case selection is only supported by the keyword suite")
+    if case_suite != "handoff":
+        raise ValueError("unknown focused case suite")
     from common import digest, read_regular, snapshot, write_json, write_new
     from suite import bundle_hash, skill_from_dir
     from handoff_judgment import CONTRACT as ASSESSMENT_CONTRACT

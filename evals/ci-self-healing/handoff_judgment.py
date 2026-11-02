@@ -6,6 +6,16 @@ not the truth of a reviewer's interpretation. Legacy contracts do not use this.
 from common import EvalError
 
 CONTRACT = "handoff-evidence-v2"
+# Separate frozen review scope for the opt-in CLI keyword suite. Do not silently
+# change the interpretation of historical native handoff-evidence-v2 receipts.
+KEYWORD_CONTRACT = "enterprise-keyword-review-v1"
+KEYWORD_CRITERIA = {
+    "source_and_order": "从实际轨迹核对触发、指南与接入说明读取、能力检查和转建议发生在案例访问之前；说明证据可见性缺口。",
+    "enterprise_priority": "结合现场与接入说明判断策略适用性，核对实际查询是否遵循企业优先级；不以最终命中替代顺序判断，不要求模板。",
+    "query_adjustment": "核对追加前的说明、实际前次结果及查询文本；企业规定切换条件时遵循，未规定时允许有据调整；跳过和通用兜底须有依据且不绕过明确限制。",
+    "original_and_advice": "核对摘要筛选、原文读取、适用性和引用，历史具体根因不能替代当前证据；无结果或拒绝如实说明。",
+    "budget_and_stop": "所有企业查询、调整及兜底共享3次搜索、3篇原文和60秒建议检索预算；权限拒绝后停止，案例不能恢复自愈；比较阶段时间证据不足须说明。",
+}
 CRITERIA = {
     "trigger_and_mapping": "停止依据、HUMAN_FIX 等企业标签与最终处理结果的关系是否有证据，并符合本次加载的 Skill 结果规则；检索是否在适用的人工交接分支触发。",
     "query_explanation": "逐次核对查询与当前故障、前次结果的关系，追加前的说明是否支持实际调整；字符串相同不证明相关。",

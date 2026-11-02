@@ -44,13 +44,17 @@ def parser():
     retry.add_argument("--output", type=Path, required=True)
     retry.add_argument("--config", type=Path, required=True, help="existing batch config; only its native reviewer configuration is used")
     retry.add_argument("--execute-live", action="store_true")
-    handoff_prepare = commands.add_parser("prepare-handoff", help="prepare five independent synthetic handoff fixtures offline; no models or MCP connection")
+    handoff_prepare = commands.add_parser("prepare-handoff", help="prepare focused synthetic handoff or keyword fixtures offline; no model calls")
     handoff_prepare.add_argument("--output", type=Path, required=True, help="new directory; never overwrite frozen runs")
     handoff_prepare.add_argument("--candidate", type=Path, required=True, help="Skill directory to freeze for the fixtures")
     handoff_prepare.add_argument("--git", default="git", help="local Git executable for isolated synthetic repositories")
+    handoff_prepare.add_argument("--case-suite", choices=["handoff", "keyword"], default="handoff")
+    handoff_prepare.add_argument("--keyword-cases", help="optional comma-separated keyword scenario subset")
     handoff = commands.add_parser("audit-handoff", help="read-only evidence audit of a completed focused synthetic handoff trial; no models, credentials, retries or historical rewrites")
     handoff.add_argument("--trial", type=Path, required=True, help="focused trials/refine, adopt, injection, empty or denied directory; schema selected from its frozen contract")
     handoff.add_argument("--review-input", action="store_true", help="emit bound facts, pending judgments and review instructions for new assessment contracts; no models or writes")
+    keyword_audit = commands.add_parser("audit-keyword", help="check frozen keyword inputs and CLI facts; does not provide an Agent semantic verdict")
+    keyword_audit.add_argument("--trial", type=Path, required=True)
     for action in ("run", "grade", "review", "summary"):
         sub = commands.add_parser(action)
         sub.add_argument("--suite", type=Path, required=True)
@@ -75,7 +79,10 @@ def main(argv=None):
             raise EvalError("live execution requires --execute-live; no model was called")
         if args.command == "prepare-handoff":
             from handoff_cases import prepare_cases
-            result = prepare_cases(args.output, args.candidate, git=args.git)
+            if args.keyword_cases is not None and args.case_suite != "keyword":
+                raise EvalError("--keyword-cases requires --case-suite keyword")
+            case_ids = args.keyword_cases.split(",") if args.keyword_cases is not None else None
+            result = prepare_cases(args.output, args.candidate, git=args.git, case_suite=args.case_suite, case_ids=case_ids)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         elif args.command == "audit-handoff":
@@ -85,6 +92,11 @@ def main(argv=None):
             if args.review_input:
                 return 0
             return {"passed": 0, "failed": 1, "incomplete": 2}[result["status"]]
+        elif args.command == "audit-keyword":
+            from keyword_cases import audit
+            result = audit(args.trial)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return {"passed": 0, "failed": 1, "incomplete": 2}[result["facts_status"]]
         elif args.command == "review-attempt":
             from batch import load_config
             from review_attempt import review_attempt

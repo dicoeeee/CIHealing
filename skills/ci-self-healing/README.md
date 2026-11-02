@@ -56,7 +56,7 @@ reviewed: false
 | **Provider** | 创建实际使用的访问说明；包含 ID/实例、失败身份来源、现有 MCP/CLI 入口及必要限制。通过可信启动输入指定 `provider` 和 `provider_reference`。本地证据足够时可不配置远端访问 | [模板与验收](docs/enterprise-configuration.md#provider-定制) · [访问规则](references/providers/provider-access.md) |
 | **分类 Profile** | 创建或引用真实标准，保留编号、层级、定义、判据、版本和适用范围；更新 `SKILL.md` 唯一绑定区中的分类行。未固定的发行包也可由可信调用选择本次 Profile | [模板与验收](docs/enterprise-configuration.md#企业分类自定义) · [分类规则](references/failure-classification.md) |
 | **企业策略** | 替换 `references/enterprise-policy.md` 的“企业策略声明”，写入附加限制或明确引用企业规范。按类别限制时注明 Profile/版本、类别及是否包含下属类别；无附加策略时保持明确声明 | [模板与验收](docs/enterprise-configuration.md#企业修复策略定制) · [策略规则](references/enterprise-policy.md) |
-| **案例源** | 创建接入说明，包含来源 ID/实例、允许范围、查询与原文读取方式、版本/完整性表示；更新唯一绑定区中的案例源行，多源各列一行。未固定时也可由可信调用指定。已确认不适用自愈或策略要求转人工时，交付前通过一次有预算限制的检索流程补充案例建议 | [模板与验收](docs/enterprise-configuration.md#企业案例库接入) · [案例规则](references/case-retrieval.md) |
+| **案例源** | 创建接入说明，包含来源 ID/实例、允许范围、查询与原文读取方式、版本/完整性表示；企业 Agent 可自行组织本源查询策略，运行时按适用条件遵循企业优先级，通用规则补足并共享原预算。更新唯一绑定区中的案例源行，多源各列一行。未固定时也可由可信调用指定。已确认不适用自愈或策略要求转人工时，交付前通过一次有预算限制的检索流程补充案例建议 | [接入与验收](docs/enterprise-configuration.md#企业案例库接入) · [查询策略执行](references/case-retrieval.md#查询构造) |
 | **企业输出规范** | 企业在一份 Markdown 中列出全部必交文件及完整栏目，配置时在 `SKILL.md` 固定绑定 ID 和入口；运行时不按参数切换。所有声明文件每次都交付，无数据按企业空模板，未知不冒充空数据；校验器可选 | [填写说明与 file_change.json 示例](docs/enterprise-output-specification.md) · [通用输出适配](references/output-delivery.md) |
 
 优先引用企业已采用、可访问且可追踪版本的文档，避免维护平行副本。配置文件只记录必要的非敏感约定和受控引用；凭据及访问隔离由宿主管理。

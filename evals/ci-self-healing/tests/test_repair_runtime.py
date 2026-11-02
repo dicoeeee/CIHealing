@@ -166,7 +166,8 @@ class RepairRuntimeTests(unittest.TestCase):
                 self.shell_probe(rows)
 
     def readback_probe(self, values):
-        function = types.SimpleNamespace(name="read_file", invoke=mock.AsyncMock(side_effect=values))
+        function = types.SimpleNamespace(name="read_file", invoke=mock.AsyncMock(side_effect=values),
+                                         parameters=lambda: {"properties": {"line_range": {}}})
         model = types.ModuleType("chrys.foundation.models.session_env")
         model.SessionEnvironment = mock.Mock()
         filesystem = types.ModuleType("chrys.service.tools.builtins.filesystem")
@@ -178,17 +179,20 @@ class RepairRuntimeTests(unittest.TestCase):
 
     def test_readback_probe_validates_array_and_rejects_string_without_coercion(self):
         good = "CI_EVAL_REPORT_START\nCI_EVAL_REPORT_END"
-        result, function = self.readback_probe([good, good, TypeError("Invalid arguments for read_file")])
-        self.assertTrue(result["string_line_range_rejected"])
+        result, function = self.readback_probe([good, good, "CI_EVAL_REPORT_MIDDLE", TypeError("Invalid arguments for read_file")])
+        self.assertEqual(result["pagination"], "line_range")
+        self.assertTrue(result["invalid_pagination_rejected"])
         calls = function.invoke.await_args_list
         self.assertNotIn("line_range", calls[0].kwargs["arguments"])
         self.assertEqual(calls[1].kwargs["arguments"]["line_range"], [1, -1])
-        self.assertEqual(calls[2].kwargs["arguments"]["line_range"], "[1, 20]")
+        self.assertEqual(calls[2].kwargs["arguments"]["line_range"], [2, 2])
+        self.assertEqual(calls[3].kwargs["arguments"]["line_range"], "[1, 20]")
         self.assertFalse(Path(calls[0].kwargs["arguments"]["path"]).exists())
 
     def test_readback_probe_does_not_mistake_partial_read_or_runtime_error_for_pass(self):
         good = "CI_EVAL_REPORT_START\nCI_EVAL_REPORT_END"
-        for values in (["CI_EVAL_REPORT_START"], [good, good, good], [good, good, TypeError("runtime failed")]):
+        for values in (["CI_EVAL_REPORT_START"], [good, good, good],
+                       [good, good, "CI_EVAL_REPORT_MIDDLE", TypeError("runtime failed")]):
             with self.subTest(values=values), self.assertRaises(EvalError):
                 self.readback_probe(values)
 
