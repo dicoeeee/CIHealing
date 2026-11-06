@@ -49,8 +49,8 @@ Maven Help 的 Effective POM 包含继承与已激活 Profile 的结果，`verbo
 
 修复任务沿用入口已确认的准入及候选验证计划，以下只补充 Maven 相关检查，不形成另一套准入或成功判据。
 
-- 以项目已有入口、原失败命令和已声明检查为依据选择验证。区分 `compiler:compile`、`compiler:testCompile` 与测试执行；直接调用某个插件 goal 不一定包含生成源码等前置阶段，按项目实际生命周期确认所需步骤。[Maven 生命周期](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html)
-- 可以用局部编译或聚焦检查缩短反馈，但不能把它冒充原始 CI 或完整影响范围的通过。共享接口或依赖变更须考虑调用方；Reactor 的 `--also-make` 加入上游依赖，不等于验证了全部下游消费者。[多模块构建](https://maven.apache.org/guides/mini/guide-multiple-modules.html)
+- 以项目已有入口、实际失败目标和已声明检查为依据，选择保留必要上下文的最小有效模块、任务或生命周期范围，不默认重跑外层脚本或整个 Reactor。区分 `compiler:compile`、`compiler:testCompile` 与测试执行；直接调用某个插件 goal 不一定包含生成源码等前置阶段，按项目实际生命周期确认所需步骤。[Maven 生命周期](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html)
+- 等价覆盖原失败目标的聚焦检查可以完成 V1；通过结论限于实际检查范围。共享接口或依赖变更须补充必要调用方检查；Reactor 的 `--also-make` 加入上游依赖，不等于验证了全部下游消费者。[多模块构建](https://maven.apache.org/guides/mini/guide-multiple-modules.html)
 - 保留原验证要求的 Profile、关键属性、编译目标和工具链条件。核对检查是否命中了正确模块、源码范围和候选；仅有 `BUILD SUCCESS`、检查被跳过或验证了错误目标，都不足以确认修复。已有通过证据发生相关漂移时按核心合同失效处理。
 - 不默认执行 `clean`、删除 `target`、清空本地依赖缓存或拉取最新依赖。若有证据需要排除陈旧产物干扰，采用范围受控的重建方式，先确认不会破坏 Job 已准备且无法重建的必要输入，并遵循基线与候选恢复。
 
