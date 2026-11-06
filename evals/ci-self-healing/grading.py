@@ -9,7 +9,7 @@ from cases import SOURCE_PREFIX, git_metadata
 from common import EvalError, changes, command, digest, json_bytes, read_json, read_regular, snapshot, write_json
 from runtime import load_runtime, probe_build
 from repair_support import RUNTIME_CONTRACT, validate_repair_artifacts
-from repair_support import EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACTS, delivery_contract_matches, enterprise_outputs_unconfigured
+from repair_support import EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT, EXECUTION_CONTRACTS, DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIVERY_CONTRACTS, EXPLICIT_DELIVERY_CONTRACTS, ENTERPRISE_DELIVERY_CONTRACTS, delivery_contract_matches, enterprise_outputs_unconfigured
 from skill_execution import audit_execution
 from suite import load_suite, select_trials, report_checker
 from generation_budget import generation_failure
@@ -79,12 +79,19 @@ def normalize_trace(raw, expected_model_id):
             "coverage": "tool-boundary observations; not a complete filesystem syscall audit"}
 
 
-def final_state_checks(before, after, expected):
+def final_state_checks(before, after, expected, *, contract=LEGACY_EXECUTION_CONTRACT):
     altered = changes(before, after)
     allowed = [p for p in altered if p.startswith(SOURCE_PREFIX) and p.endswith(".java")]
     protected = [p for p in altered if not (p in allowed or p.startswith("output/"))]
     # New directories under Java sources are allowed; elsewhere include ignored build products.
     protected = [p for p in protected if not (p.startswith(SOURCE_PREFIX) and after.get(p, {}).get("kind") == "directory")]
+    if contract == EXECUTION_CONTRACT:
+        # Trusted Maven fixture output boundary, not a generic target-name exemption.
+        # Preserve every pre-existing path; only ordinary new products are allowed.
+        build_root = "scene/sourcecode/target"
+        protected = [p for p in protected if not (
+            (p == build_root or p.startswith(build_root + "/")) and p not in before
+            and after.get(p, {}).get("kind") in {"file", "directory"})]
     unsafe_types = [p for p, entry in after.items() if entry["kind"] not in {"file", "directory"}]
     failures = []
     if protected:
@@ -126,7 +133,8 @@ def grade_trial(root, row, config):
     if digest(raw) != run["stdout_sha256"]:
         raise EvalError("execution evidence changed")
     trace = normalize_trace(raw, run["expected_model_id"])
-    result = final_state_checks(before, after, row["expected"])
+    result = final_state_checks(before, after, row["expected"],
+                                contract=run.get("skill_execution_contract", LEGACY_EXECUTION_CONTRACT))
     limited_review = reviewable_timeout(run)
     result["gaps"] = [g for g in trace["gaps"] if not (limited_review and g == "agent_execution_failed")]
     expected_delivery = read_json(root / "suite.json").get("delivery_contracts", {}).get(row["version"])
@@ -147,7 +155,7 @@ def grade_trial(root, row, config):
     contract = run.get("skill_execution_contract")
     if contract in EXECUTION_CONTRACTS:
         result["execution_checks"] = audit_execution(trial, trace["events"], after, row["expected"], run.get("backend", "docker"),
-                                                     contract=contract, trace_gaps=trace["gaps"])
+                                                     contract=contract, trace_gaps=trace["gaps"], pipeline_report=True)
         result["failures"].extend(result["execution_checks"]["failures"])
         result["gaps"].extend(result["execution_checks"]["gaps"])
     elif contract is not None:

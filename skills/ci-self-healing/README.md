@@ -11,6 +11,22 @@ reviewed: false
 
 主流程由 `SKILL.md` 统一安排。定制 reference 时保留局部知识、操作顺序、判断规则和结果说明，不在其中增加跳转主流程步骤、恢复自愈或直接结束调用的指令；局部失败只说明缺口与受限动作。
 
+## 模块职责与兼容范围
+
+执行资源合同为 `skill-execution-v7`；报告契约仍为 `v3`，交付合同仍为 `stop-artifact-v6`。入口直接安排通用模块读取，按当前分支提供其所需事实；模块交回局部结论，不继续展开通用流程。已读内容的导航引用可复用，不要求重读。
+
+| 职责 | 唯一主要位置 |
+| --- | --- |
+| 流程、加载时点、继续/停止、企业资源时序 | [SKILL.md](SKILL.md) |
+| 通用诊断及证据缺口 | [diagnosis-and-repair.md](references/diagnosis-and-repair.md)，保留旧路径 |
+| 写入保护、恢复依据与模式约束 | [execution-modes.md](references/execution-modes.md)，保留旧路径 |
+| 修复依据及实验/候选/发布准入 | [repair-admission.md](references/repair-admission.md) |
+| 候选实施、分层验证及通用完整成功条件 | [candidate-verification.md](references/candidate-verification.md) |
+| 双参数流水线报告的三种结果与明确方案门槛 | [pipeline-outcomes.md](references/pipeline-outcomes.md) |
+| 企业文件及报告适用范围、生成/校验依赖 | [output-delivery.md](references/output-delivery.md) |
+
+通用核心共 26 份指南，不是企业发行包文件数上限。Provider 的既有 `references/providers/` 路径保留实际正文；可信选定平台说明、Profile 目录与细则、策略入口明确引用的规范，以及已绑定案例源/企业输出规范，均可保留原有分层资源和路径。单跳约束针对通用流程的相互加载，不禁止这些受控企业依赖，也不要求复制企业正文或新建配置解析器。既有企业 ID、入口路径、相对路径规则、双参数及可信命名输入保持兼容；维护教程只在配置任务读取。
+
 ## 让 AI 完成配置
 
 把本 README 和已有企业材料交给 AI，可直接使用下面的请求。不必先整理完整规范，已有文档、工具说明和脱敏样例即可作为起点。
@@ -42,8 +58,8 @@ reviewed: false
 | 分类要求 | 是否采用企业分类；标准 ID、版本、范围、目录和判据入口 | 决定是否绑定 Classification Profile |
 | 修复限制 | 已采用的禁修类别/路径/操作、审批例外，或明确无附加策略 | 决定企业策略声明与引用 |
 | 历史案例 | 是否接入受阻建议与转人工前的有限案例检索；来源 ID/实例、允许范围、搜索及原文读取能力 | 决定案例源绑定 |
-| 企业输出 | 全部额外文件、每个目标路径、格式/字段/数据来源、空内容、未知/失败处理及校验方式 | 决定固定企业输出规范；明确未配置时仅交付标准报告 |
-| 项目与宿主条件 | 必需验证入口、内部业务规则、权限与协作通道、预算、清理与归档约定 | 形成宿主接入要求和仍缺条件 |
+| 企业输出 | 全部额外文件、每个目标路径、格式/字段/数据来源、空内容、未知/失败处理及校验方式 | 决定固定企业输出规范；明确未配置时按调用范围交付正式报告或普通结论 |
+| 项目与宿主条件 | 必需验证入口、内部业务规则、权限与协作通道、预算、宿主回收与归档约定 | 形成宿主接入要求和仍缺条件 |
 
 对每项区分“已有且有效”“需要新增或调整”“明确不启用”“信息待补充”。**未提供信息不等于明确不启用**：保留原配置、记录未知，只暂停依赖该缺口的配置，其余继续。无需为此新增配置数据库或必交表单。
 
@@ -88,7 +104,7 @@ provider_reference: references/providers/company-ci.md
 | **双目录场景** | 修复调用同时提供 `work_dir`、`output_dir` 会选择 [CI Job 失败现场场景](references/ci-job-failure-directory.md)：`local_verify`、无用户交互/父 Agent 移交通道，采用约定的现场文件。核对实际日志、源码映射和执行目录；不能因传入两个路径就声称任意企业布局已适配 |
 | **宿主调用能力** | 核对宿主能否加载既有 `arguments` 扩展；不支持位置展开时使用 [可信命名输入](references/invocation-inputs.md)。执行角色、实际协作通道、权限和时间/计算预算由宿主声明；`max_attempts` 可降低，当前版本最多 5 次 |
 | **业务知识与验证** | 需要内部语义、当前状态或专项验证器时，提供 [领域知识要求](references/diagnosis-and-repair.md#路由通用与企业知识) 中的来源、版本、范围、规则和实际工具。结合项目入口明确 [必要检查与通过条件](references/candidate-verification.md#分层验证)，分类目录或历史案例不能替代这些依据 |
-| **清理与产物交接** | 明确可丢弃产物、保留证据和安全清理入口，遵循 [清理合同](references/workspace-cleanup.md)。CI Job 场景由后续脚本提取 Patch、打包与归档；只有观察到实际结果才能声明已交付 |
+| **产物与交接** | 普通编译产物可保留，宿主负责工作空间回收及 Patch 筛选、提取、打包和归档。Skill 按[工作空间约定](references/execution-modes.md)保护源码、核对候选与验证有效性，只声明已观察到的接手结果 |
 | **另行远端验证** | 按 [远端合同](references/remote-verification.md) 落实专用候选 ref、发布/触发权限、准确候选对应的逐项检查和后续观察能力。只读日志接入不表示具备完整远端验证能力 |
 
 若企业要求与现有合同不兼容，例如双目录调用需要交互式修复、分类只交付到大类，或必须更改报告结构，单列为 **Skill 行为改造需求**。完成可独立的配置，说明冲突和所需改造；不把改动通用流程、提高 Attempt 上限或弱化验证包装成已完成配置。
@@ -131,7 +147,7 @@ output_dir: /path/to/healing-output
 
 以上为双目录 CI Job 修复场景，此时按六章模板生成 `analysis-fix.md`；参数已提供但无效或报告无法落盘时，用同结构完整正文披露缺口。仅诊断、单参数、无参数或通用远端调用用普通回复，不自动生成正式报告。企业文件仍按固定规范的各自路径生成，不受正式报告是否适用影响。
 
-流水线内修复报告在记录信息表中填写唯一“处理结果”：`local_verified`、`repair_advised` 或 `unresolved`。`repair_advised` 表示修法有据、方案已交付但本次仍有必要工作未完成，可由人工实施已确定的调整；需人工补齐决定修法的信息、或判断相似案例应如何适配时，方案尚未确定，归入 `unresolved`。明确禁修、超出范围或尝试失败且无明确方案也归入 `unresolved`，正文分别说明原因；已有明确方案仍为 `repair_advised`，禁令保持。信息缺失只是未解决的可能原因之一。具体条件见[结果判定](references/repair-and-verification.md#结果判定)，报告范围见[输出适配](references/output-delivery.md#报告适用范围)。
+流水线内修复报告在记录信息表中填写唯一“处理结果”：`local_verified`、`repair_advised` 或 `unresolved`。`repair_advised` 表示修法有据、方案已交付但本次仍有必要工作未完成，可由人工实施已确定的调整；需人工补齐决定修法的信息、或判断相似案例应如何适配时，方案尚未确定，归入 `unresolved`。明确禁修、超出范围或尝试失败且无明确方案也归入 `unresolved`，正文分别说明原因；已有明确方案仍为 `repair_advised`，禁令保持。信息缺失只是未解决的可能原因之一。具体条件见[结果判定](references/pipeline-outcomes.md#结果判定)，报告范围见[输出适配](references/output-delivery.md#报告适用范围)。
 
 ## 企业输出文件如何配置
 
@@ -152,7 +168,7 @@ output_dir: /path/to/healing-output
 
 本仓库目录是正式来源，无需全局安装。详细企业模板与验收场景见 [配置参考](docs/enterprise-configuration.md)；执行规则从 [SKILL.md](SKILL.md) 按需导航，报告格式以 [唯一模板](assets/analysis-fix.template.md) 为准。
 
-包内辅助脚本用于日志提取、工作空间只读校验、报告格式检查及可选的示例变更清单检查，使用 Python 3.9+ 标准库；工作空间脚本还需要 POSIX 文件访问能力。具体操作见 [日志工具指南](references/log-evidence-tool.md)、[清理指南](references/workspace-cleanup.md)、[报告指南](references/result-report.md) 和 [企业输出示例](docs/enterprise-output-specification.md)。修改脚本或相关合同后，从 Skill 根目录运行离线测试：
+包内辅助脚本用于日志提取、报告格式检查及可选的示例变更清单检查，使用 Python 3.9+ 标准库。具体操作见 [日志工具指南](references/log-evidence-tool.md)、[报告指南](references/result-report.md) 和 [企业输出示例](docs/enterprise-output-specification.md)。修改脚本或相关合同后，从 Skill 根目录运行离线测试：
 
 ~~~sh
 python3 -B -m unittest discover -s tests -v

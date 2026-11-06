@@ -38,8 +38,15 @@ def responses_trace():
             for i, (kind, oid, parent, payload) in enumerate(spec, 1)]
 
 
-def assess(rows):
-    return exchange_receipt(('\n'.join(json.dumps(r) for r in rows) + '\n').encode(), 'session-1', 'glm-5.3')
+def assess(rows, model='glm-5.3', **kwargs):
+    return exchange_receipt(('\n'.join(json.dumps(r) for r in rows) + '\n').encode(), 'session-1', model, **kwargs)
+
+
+def move_validation(rows, index):
+    validation = rows.pop(6)
+    rows.insert(index, validation)
+    for number, row in enumerate(rows, 1):
+        row['sequence'] = number
 
 
 class NativeResponsesTests(unittest.TestCase):
@@ -57,6 +64,48 @@ class NativeResponsesTests(unittest.TestCase):
         self.assertIsNone(result['finish_reason'])
         self.assertEqual(result['completion_basis'], 'chrys-responses-lifecycle')
         self.assertEqual(result['provider_terminal_status'], 'not_recorded')
+
+    def test_validation_after_exchange_before_cycle_end_is_accepted(self):
+        rows = responses_trace()
+        move_validation(rows, 7)
+        result = assess(rows)
+        self.assertEqual(result['completion_basis'], 'chrys-responses-lifecycle')
+        self.assertIsNone(result['finish_reason'])
+
+    def test_validation_must_stay_inside_its_exchange_cycle(self):
+        for index in (5, 8, 9):
+            rows = responses_trace()
+            move_validation(rows, index)
+            with self.subTest(index=index), self.assertRaises(EvalError):
+                assess(rows)
+        for field, value in (('parent_operation_id', 'other'), ('turn_id', 'other')):
+            rows = responses_trace()
+            move_validation(rows, 7)
+            rows[7][field] = value
+            with self.subTest(field=field), self.assertRaises(EvalError):
+                assess(rows)
+        rows = responses_trace()
+        move_validation(rows, 7)
+        rows[7]['payload']['exchange_operation_id'] = 'other'
+        with self.assertRaises(EvalError):
+            assess(rows)
+
+    def test_pinned_response_id_preserves_actual_request_and_response(self):
+        rows = responses_trace()
+        rows[5]['payload']['request_model'] = 'deepseek-v4.1-flash'
+        rows[7]['payload']['response_model'] = 'deepseek-v4-1-flash-261017'
+        move_validation(rows, 7)
+        with self.assertRaises(EvalError):
+            assess(rows, 'deepseek-v4.1-flash')
+        result = assess(rows, 'deepseek-v4.1-flash', expected_response_model='deepseek-v4-1-flash-261017')
+        self.assertEqual(result['request_model'], 'deepseek-v4.1-flash')
+        self.assertEqual(result['response_model'], 'deepseek-v4-1-flash-261017')
+        self.assertEqual(result['provider_terminal_status'], 'not_recorded')
+        for expected in ('deepseek-v4-1-flash', 'deepseek-v4-1-flash-261018', '', True):
+            with self.subTest(expected=expected), self.assertRaises(EvalError):
+                assess(rows, 'deepseek-v4.1-flash', expected_response_model=expected)
+        with self.assertRaises(EvalError):
+            assess(rows, 'other-request', expected_response_model='deepseek-v4-1-flash-261017')
 
     def test_missing_finish_reason_alone_is_not_sufficient(self):
         for index, field, value in [(5, 'api_style', 'chat_completions'), (6, 'outcome', 'rejected'),

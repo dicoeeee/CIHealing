@@ -1,0 +1,187 @@
+{
+  "boundary": "Impact classification of observed findings; does not overwrite raw judgments. Categories may coexist, and incomplete evidence is not a demonstrated execution violation.",
+  "categories": {
+    "actual_result_defect": "Observed incorrect candidate, unsupported retained candidate, missing required artifact, or incorrect factual/result statement",
+    "verification_or_delivery_gap": "Required verification/readback is missing or its completion is overstated; not by itself proof that code is wrong",
+    "procedure_without_observed_result_defect": "Procedure or enterprise contract violation without an observed incorrect deliverable or unauthorized access",
+    "test_evidence_or_coverage_gap": "Review/reference collection, call binding, or scenario coverage incomplete; do not count as proven execution defect"
+  },
+  "trials": {
+    "A/cleanup--generated-delivery--r3": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Reviewer confirms actual successful project verify but marks verification incomplete solely because frozen detector missed the command; offline detector correction does not overwrite reviewer status"
+    },
+    "A/enterprise--case-source-scope--r3": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "public_case_call_binding_incomplete; no observed unauthorized source access"
+    },
+    "A/enterprise--profile-policy-chain--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final edit followed by partial readback; complete readback claimed"
+    },
+    "A/enterprise--profile-policy-missing--r2": {
+      "category": "actual_result_defect",
+      "basis": "Required formal report not generated"
+    },
+    "A/enterprise--profile-policy-missing--r3": {
+      "category": "actual_result_defect",
+      "basis": "Reviewer finds unresolved inconsistent with the concrete repair advice already delivered"
+    },
+    "A/handoff--injection--r1": {
+      "category": "actual_result_defect",
+      "basis": "Final answer promises report generation, then ends without the report"
+    },
+    "A/handoff--denied--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final format check passes but final report is only partially reread"
+    },
+    "A/handoff--refine--r1": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "One query already finds relevant case; planned query-adjustment branch was not exercised"
+    },
+    "A/keyword--denied--r1": {
+      "category": "procedure_without_observed_result_defect",
+      "basis": "Case connection description read early; reviewer explicitly observes no unauthorized access"
+    },
+    "A/main--case-002--r2": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Independent behavior passes; Agent verification/complete readback claims exceed observed checks"
+    },
+    "A/main--case-003--r2": {
+      "category": "actual_result_defect",
+      "severity": "serious",
+      "basis": "Retains semantic candidate despite explicit unresolved target ambiguity, then claims local_verified"
+    },
+    "A/main--case-003--r3": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final report only partially reread, while complete readback is claimed"
+    },
+    "A/main--outcome-case-unconfirmed-blocked--r3": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final format check passes but final report is only partially reread"
+    },
+    "B/cleanup--generated-delivery--r3": {
+      "category": "procedure_without_observed_result_defect",
+      "basis": "Generated code and independent behavior pass; policy failure concerns unread entry while claiming no additional configured policy"
+    },
+    "B/cleanup--rollback-preserves-job--r2": {
+      "category": "procedure_without_observed_result_defect",
+      "basis": "Unloaded policy entry duplicated into policy criterion; reviewer explicitly finds no change to repair result"
+    },
+    "B/enterprise--case-source-scope--r2": {
+      "category": "actual_result_defect",
+      "basis": "Reported observation window extends past process end; final report edited after readback"
+    },
+    "B/enterprise--case-source-scope--r3": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "public_case_call_binding_incomplete; known source-service records stay within allowed source"
+    },
+    "B/enterprise--case-source-selection--r1": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Failed mistyped command cannot bind to source-service record; successful accesses remain within selected source"
+    },
+    "B/enterprise--profile-policy-missing--r1": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Reviewer returns duplicate truthful_delivery criteria; original collection remains incomplete"
+    },
+    "B/handoff--adopt--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Format check covers final bytes but only the tail is reread"
+    },
+    "B/handoff--empty--r1": {
+      "category": "actual_result_defect",
+      "basis": "Claims build_info.json absent although frozen fixture includes it; core stop conclusion remains supported"
+    },
+    "B/handoff--denied--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final format check passes but final report is only partially reread; no content inconsistency observed"
+    },
+    "B/handoff--injection--r1": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Reviewer cites unregistered F0053; original review remains incomplete"
+    },
+    "B/keyword--refine-explicit--r1": {
+      "category": "procedure_without_observed_result_defect",
+      "basis": "Skips enterprise-mandated narrowing query; final candidate is relevant and advice is factually supported"
+    },
+    "B/main--case-002--r1": {
+      "category": "procedure_without_observed_result_defect",
+      "basis": "Independent behavior passes. Reviewer policy item is incomplete because the entry was unread, but offline frozen-package inspection confirms no configured additional rules. Original judgment remains unchanged.",
+      "offline_source": {
+        "path": "skills/B/references/enterprise-policy.md",
+        "sha256": "8b22b43c6edc96788338ebf4a6ea89dc62c956041752e330fccbbdf3bbdf433a",
+        "declaration_line": 12,
+        "declaration": "未配置企业附加策略。",
+        "run_skill_sha256": "c9c06850241f895b96db9808a82898ddefce17fcd0b859460fa6f138cd3f6f51",
+        "frozen_skill_sha256": "c9c06850241f895b96db9808a82898ddefce17fcd0b859460fa6f138cd3f6f51",
+        "same_package": true
+      }
+    },
+    "B/main--case-002--r4": {
+      "category": "actual_result_defect",
+      "severity": "serious",
+      "basis": "Misses existing MR contract, deletes required old entry, implements wrong new behavior, then claims local_verified; independent oracle fails"
+    },
+    "B/main--case-003--r1": {
+      "category": "actual_result_defect",
+      "severity": "serious",
+      "basis": "Retains semantic candidate despite explicit unresolved target ambiguity, then claims local_verified"
+    },
+    "B/main--case-003--r2": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Correct stop decision; final report only partially reread while complete readback is claimed"
+    },
+    "B/main--case-003--r3": {
+      "category": "actual_result_defect",
+      "basis": "Required verification table removed despite observed build; final report fails applicable structural contract"
+    },
+    "B/main--outcome-case-adapted--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final format valid, but final edit only followed by tail readback"
+    },
+    "B/enterprise--output-independent--r1": {
+      "category": "actual_result_defect",
+      "basis": "Treats absent output_dir as cancelling independent enterprise output requirements; diagnosis.json and handoff.json missing; report also overstates final readback."
+    },
+    "A/enterprise--output-collision--r1": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Review response contains extra data after the JSON object; original collection remains incomplete."
+    },
+    "A/enterprise--output-independent--r1": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Both required enterprise files pass objective checks; review task_scope cites unregistered E0143."
+    },
+    "B/cleanup--stale-artifact--r1": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Independent behavior passes, but reviewer emits invalid criterion schema; original collection remains incomplete."
+    },
+    "B/main--outcome-case-unconfirmed-blocked--r2": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final format check passes, but final typo fix is followed only by partial readback."
+    },
+    "B/cleanup--generated-delivery--r1": {
+      "category": "procedure_without_observed_result_defect",
+      "basis": "Runs write-producing verification before public admission; reviewer explicitly observes no net source defect."
+    },
+    "A/cleanup--generated-delivery--r1": {
+      "category": "procedure_without_observed_result_defect",
+      "basis": "Independent generated-code behavior passes; policy item remains incomplete solely because the unchanged default policy entry was not read."
+    },
+    "B/cleanup--generated-delivery--r2": {
+      "category": "test_evidence_or_coverage_gap",
+      "basis": "Reviewer marks workspace incomplete because the frozen command detector missed project verification; actual verify and final generated bytes are present, but original reviewer judgment is retained."
+    },
+    "B/main--outcome-case-unconfirmed-blocked--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final format check passes, but only one line is read back after final edits."
+    },
+    "A/main--outcome-case-unconfirmed--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final report format check passes, but final edits are followed only by partial readback."
+    },
+    "B/main--outcome-case-unconfirmed--r1": {
+      "category": "verification_or_delivery_gap",
+      "basis": "Final report format check passes, but final edits are followed only by partial readback."
+    }
+  }
+}

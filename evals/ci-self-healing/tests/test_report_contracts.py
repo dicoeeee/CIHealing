@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from common import EvalError, read_json, write_json
+from common import EvalError, read_json, read_regular, write_json
 from repair_support import ENTERPRISE_DELIVERY_CONTRACT, FOUR_OUTCOME_DELIVERY_CONTRACT, PIPELINE_DELIVERY_CONTRACT
 from suite import REPO, prepare, load_suite, report_checker
 from test_eval import STOP_REPORT
@@ -58,9 +58,19 @@ class ReportContractTests(unittest.TestCase):
         checker.write_text("print('always pass')")
         with self.assertRaises(EvalError): load_suite(self.root)
 
-    def test_live_report_resources_match_new_frozen_contract(self):
-        for name in ("scripts/report_check.py", "assets/analysis-fix.template.md"):
-            self.assertEqual((REPO / "skills/ci-self-healing" / name).read_bytes(), (ROOT / "contracts/v3" / name).read_bytes())
+    def test_live_checker_and_template_structure_match_frozen_v3_contract(self):
+        # v8 changes behavioral instructions, not the three-outcome report format.
+        # Preserve the host-owned v3 checker/template and compare every structural
+        # line; only standalone authoring prompts and blank lines may differ.
+        script = "scripts/report_check.py"
+        self.assertEqual(read_regular(REPO / "skills/ci-self-healing" / script),
+                         read_regular(ROOT / "contracts/v3" / script))
+        def structural_lines(raw):
+            return [line for line in raw.decode().splitlines() if line.strip()
+                    and not (line.startswith("{{REPORT:") and line.endswith("}}"))]
+        template = "assets/analysis-fix.template.md"
+        self.assertEqual(structural_lines(read_regular(REPO / "skills/ci-self-healing" / template)),
+                         structural_lines(read_regular(ROOT / "contracts/v3" / template)))
 
     def test_four_and_three_outcome_contracts_keep_distinct_checks_and_review_targets(self):
         from common import read_regular

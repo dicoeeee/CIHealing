@@ -1,0 +1,134 @@
+---
+ai_generated: true
+reviewed: false
+---
+
+# 核心合同
+
+本文件定义修复调用的逻辑合同。过程记录可由宿主编码为 YAML、JSON、消息或事件；格式未指定时，表达必要内容并引用已有证据即可。简写仍须满足身份、权限、验证和准入时序，无需新增状态机或重复表单。最终文字交付使用报告规范，不受过程记录的格式自由度影响。
+
+## 运行时边界
+
+本 Skill 是无状态或弱状态的，不声称提供持续同步或工具层写入拦截。准入记录使判断可核查，但字段齐全不证明语义判断正确；如需工具层拦截，须由宿主实现，不由 Skill 文本保证。
+
+| 信息 | 权威来源 | 规则 |
+| --- | --- | --- |
+| Git、命令和 CI 事实 | 工具或 Provider 观察 | 记录来源和 `observed_at` |
+| 诊断与下一步行动决策 | AI 评估 | 绑定证据引用，并在相关内容漂移后重新计算 |
+| 工作流实时进度 | 外部 Harness 或 Provider | 按需轮询、订阅、持久化并重新调用 Skill |
+| 修复成功 | 当前有效准入与验证收据 | 区分检查事实与修复结论，遵循 完整成功条件 |
+
+`diagnosing`、`candidate_prepared`、`local_verifying` 或 `awaiting_outer_ci` 等临时标签可以作为进度事件，但不是持久化业务结果。
+
+## Healing Request
+
+以下合同用于修复调用；只读任务不建立修复身份。修复成果按完整成功条件判断；仅双参数流水线修复需要按结果判定填写正式报告的唯一处理结果。其他调用交付已有事实、限制和下一步。输入按调用参数解析使用，失败事实与诊断记录见建立失败合同。
+
+```yaml
+healing_request:
+  invocation_id: <本次独立调用的唯一身份>
+  executor_role: main | subagent | unknown
+  collaboration:
+    can_ask_user: false
+    can_handoff_to_parent: false
+    parent_ref: optional
+  mode: local_verify | remote_verify
+  runtime_context: local_checkout | inline_ci_job | terminal_repair
+  provider: <稳定 Provider ID，或 auto；例如 github_actions、gitlab_ci、company-ci>
+  provider_reference: optional
+  failure_ref:
+    run_id: optional
+    run_attempt: optional
+    job_id: optional
+    task_or_command: optional
+  baseline_sha: auto | explicit
+  output_dir: optional
+  limits:
+    max_attempts: 5
+    time_budget: optional
+    compute_budget: optional
+```
+
+`provider` 与可选的 `provider_reference` 是明确请求或可信宿主/配置提供的命名输入，也适用于只读诊断，不增加主入口的位置参数。`auto` 表示尚待确定。需要访问平台时按 Provider 访问解析选择；仅使用已有证据时按失败绑定记录实际来源。
+
+## 仓库与基线绑定
+
+本文件的请求、候选和收据示例按单仓展示；`baseline_sha`、候选 SHA 与 ref 均属于对应仓库。多仓调用在已有记录中分别关联各仓库身份、实际工作空间、固定基线及参与验证的代码状态；跨仓检查的收据关联其实际消费的各仓状态，不能只用主仓 SHA 代表整个候选。工作空间已有修改仍按基线与候选恢复保护。
+
+同一次多仓调用共用 `invocation_id` 和调用预算；一个完整跨仓候选进入验证时按下方规则计一次 Attempt，不按仓库另起计数。各仓状态发生相关漂移时，按[收据绑定与失效](#收据绑定与失效)重评受影响的决定和检查，不改写原基线来掩盖变化。
+
+## 执行身份与协作能力
+
+`executor_role` 和 `collaboration` 来自调用参数或宿主可信上下文。缺省角色为 `unknown`，两种能力缺省为 `false`。能力须已声明且有实际可用通道；本地目录、终端或主 Agent 身份本身不证明可以交互。向主 Agent 移交还须能确认接收者，`parent_ref` 可以由宿主提供或明确路由。
+
+这些字段描述协作条件，不授予代码修改、外部发布或改变策略的权限，也不由 `local_verify` / `remote_verify` 推导。宿主负责实际提问和 Agent 移交通道；本 Skill 提供当前执行者的行为约定。具体分支见交互与移交。
+
+## 调用身份与限额
+
+一次独立自愈调用对应一个固定的 `invocation_id`，也是本 Skill 中的 Healing Session 身份；由宿主提供或在本次入口确定。同一次执行因用户交互暂停后继续，沿用该身份、Attempt 记录和预算，不重置或自行延长限额。
+
+调用方再次委派或明确重新发起独立调用时使用新身份，次数与预算独立计算，不跨调用累计。历史证据可以按有效性复用，保留其原始来源；重新计数不意味着旧候选已被撤销或旧收据自动适用。限额耗尽后不得开展依赖剩余额度的新动作，不自行重开调用来重置次数。
+
+仓库策略可以降低每次调用的 `max_attempts`，但在此 Skill 版本中不能将其提高到五次以上。时间与计算预算的口径遵循宿主声明。
+
+只有完整候选进入验证时才开始计数一个 Attempt。临时插桩、聚焦实验、日志收集、假设细化、询问用户和移交本身不增加 `index`。
+
+记录第一个满足完整成功条件的候选、已有有效策略与证据、必要动作限制及剩余预算，供主入口判断是否继续。修复成功条件见完整成功条件；本合同不另设候选循环或调用结束出口。
+
+## Attempt 记录
+
+```yaml
+attempt:
+  invocation_id: <本次调用身份>
+  index: 1
+  baseline_sha: <固定的 Git 提交基线>
+  evidence_snapshot_ref: <本次决策使用的证据>
+  diagnosis_ref: <诊断评估>
+  candidate:
+    fingerprint: <候选代码状态指纹>
+    head_sha: optional
+    ref: optional
+  observations:
+    local_verification:
+      result: passed | failed | incomplete | not_run
+      evidence_refs: []
+      observed_at: optional
+    remote_pipeline:
+      run_ref: optional
+      status: queued | running | passed | failed | canceled | unknown | not_run
+      evidence_refs: []
+      observed_at: optional
+  evidence_delta: []
+  decision:
+    control: continue | pass | stop
+    reason: <绑定证据的理由>
+    evidence_refs: []
+```
+
+`observations` 仅汇总各自执行范围。逐项 `evidence_refs` 对应验证计划的检查标识；记录规则见 分层验证，身份要求见下方收据绑定。
+
+`fingerprint` 标识实际候选代码状态，不表示 Patch 已提取或已持久化。候选未提交时，`head_sha` 留空，不能用基线 SHA 代替；工作空间交付见 执行模式。
+
+## 收据绑定与失效
+
+验证或写回收据至少必须绑定：
+
+```text
+repository
++ 产生该收据的 invocation_id
++ baseline_sha
++ candidate_fingerprint
++ candidate_head_sha（已提交时）
++ 环境或 Provider 运行身份
++ 命令或检查身份
++ 结果
++ observed_at
+```
+
+HEAD 漂移、候选漂移、策略漂移、相关环境漂移、目标行为的相关变化或企业知识包漂移，会使受影响的决策和收据失效。应重新观察并计算，不要沿用过期的通过结果。跨调用引用旧收据时，保留原调用身份并核对其对当前基线、候选、环境和验证要求的适用性；不把旧结果改写成本次实际执行。
+
+本合同交回角色、通道和接手方能力；实际协作由入口安排。修复成功须有当前准入、必要验证和清理证据；入口在候选验证分支复核完整成功，在流水线交付分支判定报告结果。
+
+## 可选的学习输出
+
+Case Draft 可以记录 Failure Snapshot、诊断、候选 Attempt、验证收据、结果、负向约束和剩余缺口。它在外部治理流程审核并准入前始终是草稿。本 Skill 不得提升 Case 的权威级别、改写权威知识，或将历史 Patch 视为当前证明。

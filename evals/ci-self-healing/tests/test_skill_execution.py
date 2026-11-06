@@ -9,11 +9,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from common import EvalError, changes, digest, json_bytes, read_regular, snapshot, write_new
-from repair_support import (EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT, RECOVERY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT,
+from repair_support import (MODULAR_EXECUTION_CONTRACT as EXECUTION_CONTRACT, MERGED_EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT, RECOVERY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT,
                             execution_contract, source_state)
 from skill_execution import audit_execution, is_build, workspace_result
 
-SKILL = ROOT.parents[1] / "skills/ci-self-healing"
+SKILL = ROOT / "legacy/cleanup-v7/skill"
 
 
 class SkillExecutionTests(unittest.TestCase):
@@ -33,8 +33,9 @@ class SkillExecutionTests(unittest.TestCase):
         self.previous = snapshot(self.visible)
         write_new(self.skill / "assets/execution-resources.json", read_regular(SKILL / "assets/execution-resources.json"))
         for name in ("SKILL.md", "references/invocation-inputs.md", "references/diagnosis-and-repair.md",
-                     "references/repair-and-verification.md", "references/enterprise-policy.md",
-                     "references/candidate-verification.md", "references/workspace-cleanup.md"):
+                     "references/repair-admission.md", "references/enterprise-policy.md",
+                     "references/candidate-verification.md", "references/workspace-cleanup.md",
+                     "references/output-delivery.md"):
             self.load_resource(name)
 
     def load_resource(self, name, data=None):
@@ -55,6 +56,7 @@ class SkillExecutionTests(unittest.TestCase):
         # Synthetic frozen bytes for the path/full-read protocol only. Original
         # historical guide clauses are covered separately by projection/replay.
         self.load_resource("references/repair-basis.md", b"# Frozen separate repair basis\nlegacy gate fixture\n")
+        self.load_resource("references/repair-and-verification.md", b"# Frozen admission and verification\nlegacy gate fixture\n")
 
     def truncate_resource(self, resource):
         for i, event in enumerate(self.events):
@@ -105,6 +107,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.event("InvocationMessage", {"text": "cleaned"})
 
     def audit(self, expected="repair_caller", **kwargs):
+        kwargs.setdefault("contract", EXECUTION_CONTRACT)
         return audit_execution(self.trial, self.events, snapshot(self.visible), expected, **kwargs)
 
     def checks(self, expected="repair_caller"):
@@ -138,9 +141,9 @@ class SkillExecutionTests(unittest.TestCase):
 
     def test_case_guide_cannot_replace_current_target_behavior_gate(self):
         self.load_resource("references/case-retrieval.md")
-        self.truncate_resource("references/repair-and-verification.md")
+        self.truncate_resource("references/repair-admission.md")
         self.candidate_and_verified_cleanup()
-        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-and-verification.md", self.checks())
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-admission.md", self.checks())
 
     def test_case_capability_failure_without_writes_needs_no_repair_resources(self):
         # Synthetic metadata-only calls; this checks resource/side-effect audit,
@@ -382,6 +385,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertIn("protected_inputs_or_cleanup", [f["check"] for f in final_state_checks(before, snapshot(self.visible), "repair_caller")["failures"]])
 
     def test_v1_remains_strict_on_identical_recovered_trace(self):
+        self.historical_layout(LEGACY_EXECUTION_CONTRACT)
         self.late_candidate(); self.complete_recovery()
         result = self.audit(contract=LEGACY_EXECUTION_CONTRACT)
         self.assertEqual([f["check"] for f in result["failures"]], ["build_without_confirmed_native_capture"])
@@ -416,7 +420,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual(self.audit("stop", contract=INPUT_EXECUTION_CONTRACT)["failures"], result["failures"])
 
     def test_admission_tail_without_merged_basis_is_an_incomplete_read(self):
-        resource = "references/repair-and-verification.md"
+        resource = "references/repair-admission.md"
         body = read_regular(SKILL / resource).decode()
         tail = body[body.index("## 候选修改前的准入记录"):]
         for event in self.events:
@@ -432,12 +436,12 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertNotIn("references/workspace-recovery.md", [r["resource"] for r in result["resource_reads"]])
 
     def test_candidate_write_requires_complete_merged_guide_before_action(self):
-        self.truncate_resource("references/repair-and-verification.md")
+        self.truncate_resource("references/repair-admission.md")
         self.call("edit_file", {"path": "Example.java"}, "done",
                   lambda: (self.repo / "src/main/java/Example.java").write_text("class Changed {}"))
-        self.load_resource("references/repair-and-verification.md")  # A late read cannot repair the earlier gate.
+        self.load_resource("references/repair-admission.md")  # A late read cannot repair the earlier gate.
         self.workspace("capture"); self.build(); self.clean(); self.workspace("check")
-        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-and-verification.md", self.checks())
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-admission.md", self.checks())
 
     def candidate_and_verified_cleanup(self):
         self.call("edit_file", {"path": "Example.java"}, "done",
@@ -478,8 +482,9 @@ class SkillExecutionTests(unittest.TestCase):
     def test_specialist_and_basis_do_not_replace_common_diagnosis_read(self):
         self.events = []
         for name in ("SKILL.md", "references/invocation-inputs.md", "references/java-maven-compilation.md",
-                     "references/repair-and-verification.md", "references/enterprise-policy.md",
-                     "references/candidate-verification.md", "references/workspace-cleanup.md"):
+                     "references/repair-admission.md", "references/enterprise-policy.md",
+                     "references/candidate-verification.md", "references/workspace-cleanup.md",
+                     "references/output-delivery.md"):
             self.load_resource(name)
         self.candidate_and_verified_cleanup()
         result = self.audit()
@@ -517,8 +522,9 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertEqual(result["recoveries"], [])
 
     def test_stop_does_not_require_candidate_or_cleanup_branch_reads(self):
-        for resource in ("references/repair-and-verification.md", "references/enterprise-policy.md",
-                         "references/candidate-verification.md", "references/workspace-cleanup.md"):
+        for resource in ("references/repair-admission.md", "references/enterprise-policy.md",
+                         "references/candidate-verification.md", "references/workspace-cleanup.md",
+                     "references/output-delivery.md"):
             self.truncate_resource(resource)
         self.assertEqual(self.audit("stop")["failures"], [])
 
@@ -585,7 +591,7 @@ class SkillExecutionTests(unittest.TestCase):
 
     def test_stop_report_only_does_not_enter_build_cleanup_protocol(self):
         self.events = []
-        for resource in ("SKILL.md", "references/invocation-inputs.md"):
+        for resource in ("SKILL.md", "references/invocation-inputs.md", "references/output-delivery.md"):
             self.load_resource(resource)
         self.call("write_file", {"path": str(self.out / "analysis-fix.md")}, "done",
                   lambda: write_new(self.out / "analysis-fix.md", "synthetic stop report"))
@@ -636,6 +642,80 @@ class SkillExecutionTests(unittest.TestCase):
         old = self.trial / "legacy-skill"
         write_new(old / "SKILL.md", "# Frozen pre-split Skill\n")
         self.assertEqual(execution_contract(old), RECOVERY_EXECUTION_CONTRACT)
+
+    def test_v6_keeps_merged_path_and_does_not_require_v7_outcomes(self):
+        self.historical_layout(MERGED_EXECUTION_CONTRACT)
+        self.truncate_resource("references/repair-admission.md")
+        self.truncate_resource("references/output-delivery.md")
+        self.candidate_and_verified_cleanup()
+        result = self.audit(contract=MERGED_EXECUTION_CONTRACT, pipeline_report=True)
+        self.assertEqual(result["failures"], [])
+        self.assertNotIn("references/pipeline-outcomes.md", [r["resource"] for r in result["resource_reads"]])
+
+    def test_v6_merged_read_is_still_required_and_v7_guide_does_not_replace_it(self):
+        self.historical_layout(MERGED_EXECUTION_CONTRACT)
+        self.truncate_resource("references/repair-and-verification.md")
+        self.candidate_and_verified_cleanup()
+        checks = [f["check"] for f in self.audit(contract=MERGED_EXECUTION_CONTRACT)["failures"]]
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-and-verification.md", checks)
+
+    def test_v7_old_merged_read_does_not_replace_admission(self):
+        self.load_resource("references/repair-and-verification.md", b"# Historical complete guide\n")
+        self.truncate_resource("references/repair-admission.md")
+        self.candidate_and_verified_cleanup()
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/repair-admission.md", self.checks())
+
+    def write_report(self, name="analysis-fix.md"):
+        path = self.out / name
+        self.call("write_file", {"path": str(path), "content": "known facts"}, "written",
+                  lambda: path.write_text("known facts"))
+
+    def test_v7_output_preparation_must_finish_before_write_and_cannot_be_posthoc(self):
+        self.truncate_resource("references/output-delivery.md")
+        self.call("read_skill_resource", {"skill_name": "ci-self-healing", "resource_name": "references/output-delivery.md"},
+                  "[truncated]")
+        self.write_report("result.md")
+        before = self.audit("stop", pipeline_report=False)["failures"]
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/output-delivery.md",
+                      [f["check"] for f in before])
+        self.load_resource("references/output-delivery.md")
+        self.assertEqual(self.audit("stop", pipeline_report=False)["failures"], before)
+
+    def test_v7_stop_report_needs_outcomes_but_no_candidate_or_cleanup_guides(self):
+        for resource in ("references/repair-admission.md", "references/enterprise-policy.md",
+                         "references/candidate-verification.md", "references/workspace-cleanup.md"):
+            self.truncate_resource(resource)
+        self.load_resource("references/pipeline-outcomes.md")
+        self.write_report()
+        self.assertEqual(self.audit("stop", pipeline_report=True)["failures"], [])
+
+    def test_v7_late_outcomes_read_does_not_repair_report_write_order(self):
+        self.write_report()
+        before = self.audit("stop", pipeline_report=True)["failures"]
+        self.assertIn("required_skill_resource_not_loaded_before_action:references/pipeline-outcomes.md",
+                      [f["check"] for f in before])
+        self.load_resource("references/pipeline-outcomes.md")
+        self.assertEqual(self.audit("stop", pipeline_report=True)["failures"], before)
+
+    def test_v7_ordinary_or_enterprise_output_does_not_imply_formal_report(self):
+        self.write_report("result.md")
+        self.write_report()  # Even a filename does not establish trusted applicability.
+        for scope in (None, False):
+            with self.subTest(pipeline_report=scope):
+                result = self.audit("stop", pipeline_report=scope)
+                self.assertEqual(result["failures"], [])
+                self.assertNotIn("references/pipeline-outcomes.md", [r["resource"] for r in result["resource_reads"]])
+
+    def test_v7_outcomes_read_started_in_same_batch_is_not_complete_before_write(self):
+        resource = "references/pipeline-outcomes.md"
+        body = read_regular(SKILL / resource)
+        write_new(self.skill / resource, body)
+        self.event("InvocationToolCallStart", {"tool_name": "read_skill_resource", "call_id": "outcome-read",
+                   "args": {"skill_name": "ci-self-healing", "resource_name": resource}})
+        self.write_report()
+        self.event("InvocationToolCallResult", {"call_id": "outcome-read", "result": body.decode()})
+        self.assertIn("required_skill_resource_not_loaded_before_action:" + resource,
+                      [f["check"] for f in self.audit("stop", pipeline_report=True)["failures"]])
 
     def test_recapture_and_match_without_rerun_cannot_recover(self):
         self.late_candidate()
@@ -779,7 +859,7 @@ class SkillExecutionTests(unittest.TestCase):
         self.assertIn("skill_native_tool_bypassed", self.checks("stop"))
 
     def test_truncated_cleanup_guide_cannot_satisfy_prebuild_read(self):
-        self.events[-1]["payload"]["result"] = "# 验证副产物清理与校验\n[truncated]"
+        self.truncate_resource("references/workspace-cleanup.md")
         self.workspace("capture"); self.build()
         self.assertIn("required_skill_resource_not_loaded_before_action:references/workspace-cleanup.md", self.checks())
 

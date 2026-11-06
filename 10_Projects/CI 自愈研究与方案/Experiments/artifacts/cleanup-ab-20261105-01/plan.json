@@ -1,0 +1,880 @@
+{
+  "boundary": "real native iCode/model executions on frozen synthetic fixtures; not production incident statistics",
+  "common_quality_contract": "ci-cleanup-common-quality-v1",
+  "contract": "ci-cleanup-ab-v1",
+  "created_at": "2026-11-05T12:50:00.771135+00:00",
+  "execute_timeout_seconds": 1200,
+  "execution_workers": 4,
+  "executions": 118,
+  "executor": "glm-5.2",
+  "global_icode_limit": 6,
+  "global_pool": "<REPO>/evals/ci-self-healing/runs/.icode-global",
+  "max_reviews": 118,
+  "retry_policy": "started phases never replay automatically; all replacement attempts need distinct IDs and recorded reasons",
+  "review_timeout_seconds": 900,
+  "review_workers": 2,
+  "reviewer": "deepseek-v4.1-flash",
+  "rows": [
+    {
+      "group": "main",
+      "id": "main--case-001--r1",
+      "repeat": 1,
+      "scenario": "case-001"
+    },
+    {
+      "group": "main",
+      "id": "main--case-002--r1",
+      "repeat": 1,
+      "scenario": "case-002"
+    },
+    {
+      "group": "main",
+      "id": "main--case-003--r1",
+      "repeat": 1,
+      "scenario": "case-003"
+    },
+    {
+      "group": "main",
+      "id": "main--case-003--r2",
+      "repeat": 2,
+      "scenario": "case-003"
+    },
+    {
+      "group": "main",
+      "id": "main--case-003--r3",
+      "repeat": 3,
+      "scenario": "case-003"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-advised--r1",
+      "repeat": 1,
+      "scenario": "outcome-advised"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-not-applicable--r1",
+      "repeat": 1,
+      "scenario": "outcome-not-applicable"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-case-adapted--r1",
+      "repeat": 1,
+      "scenario": "outcome-case-adapted"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-case-unconfirmed--r1",
+      "repeat": 1,
+      "scenario": "outcome-case-unconfirmed"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-case-unconfirmed-blocked--r1",
+      "repeat": 1,
+      "scenario": "outcome-case-unconfirmed-blocked"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-case-unconfirmed-blocked--r2",
+      "repeat": 2,
+      "scenario": "outcome-case-unconfirmed-blocked"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-case-unconfirmed-blocked--r3",
+      "repeat": 3,
+      "scenario": "outcome-case-unconfirmed-blocked"
+    },
+    {
+      "group": "main",
+      "id": "main--outcome-case-counterevidence--r1",
+      "repeat": 1,
+      "scenario": "outcome-case-counterevidence"
+    },
+    {
+      "group": "handoff",
+      "id": "handoff--refine--r1",
+      "repeat": 1,
+      "scenario": "refine"
+    },
+    {
+      "group": "handoff",
+      "id": "handoff--adopt--r1",
+      "repeat": 1,
+      "scenario": "adopt"
+    },
+    {
+      "group": "handoff",
+      "id": "handoff--injection--r1",
+      "repeat": 1,
+      "scenario": "injection"
+    },
+    {
+      "group": "handoff",
+      "id": "handoff--injection--r2",
+      "repeat": 2,
+      "scenario": "injection"
+    },
+    {
+      "group": "handoff",
+      "id": "handoff--injection--r3",
+      "repeat": 3,
+      "scenario": "injection"
+    },
+    {
+      "group": "handoff",
+      "id": "handoff--empty--r1",
+      "repeat": 1,
+      "scenario": "empty"
+    },
+    {
+      "group": "handoff",
+      "id": "handoff--denied--r1",
+      "repeat": 1,
+      "scenario": "denied"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--component-first--r1",
+      "repeat": 1,
+      "scenario": "component-first"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--error-first--r1",
+      "repeat": 1,
+      "scenario": "error-first"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--conditional--r1",
+      "repeat": 1,
+      "scenario": "conditional"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--refine-explicit--r1",
+      "repeat": 1,
+      "scenario": "refine-explicit"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--refine-adaptive--r1",
+      "repeat": 1,
+      "scenario": "refine-adaptive"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--fallback--r1",
+      "repeat": 1,
+      "scenario": "fallback"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--budget--r1",
+      "repeat": 1,
+      "scenario": "budget"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--no-strategy--r1",
+      "repeat": 1,
+      "scenario": "no-strategy"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--denied--r1",
+      "repeat": 1,
+      "scenario": "denied"
+    },
+    {
+      "group": "keyword",
+      "id": "keyword--refine-windowed--r1",
+      "repeat": 1,
+      "scenario": "refine-windowed"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--profile-policy-chain--r1",
+      "repeat": 1,
+      "scenario": "profile-policy-chain"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--profile-policy-missing--r1",
+      "repeat": 1,
+      "scenario": "profile-policy-missing"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--profile-policy-missing--r2",
+      "repeat": 2,
+      "scenario": "profile-policy-missing"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--profile-policy-missing--r3",
+      "repeat": 3,
+      "scenario": "profile-policy-missing"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--case-source-selection--r1",
+      "repeat": 1,
+      "scenario": "case-source-selection"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--case-source-scope--r1",
+      "repeat": 1,
+      "scenario": "case-source-scope"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--case-source-scope--r2",
+      "repeat": 2,
+      "scenario": "case-source-scope"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--case-source-scope--r3",
+      "repeat": 3,
+      "scenario": "case-source-scope"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--output-independent--r1",
+      "repeat": 1,
+      "scenario": "output-independent"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--output-collision--r1",
+      "repeat": 1,
+      "scenario": "output-collision"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--output-collision--r2",
+      "repeat": 2,
+      "scenario": "output-collision"
+    },
+    {
+      "group": "enterprise",
+      "id": "enterprise--output-collision--r3",
+      "repeat": 3,
+      "scenario": "output-collision"
+    },
+    {
+      "group": "main",
+      "id": "main--case-001--r2",
+      "repeat": 2,
+      "scenario": "case-001"
+    },
+    {
+      "group": "main",
+      "id": "main--case-001--r3",
+      "repeat": 3,
+      "scenario": "case-001"
+    },
+    {
+      "group": "main",
+      "id": "main--case-001--r4",
+      "repeat": 4,
+      "scenario": "case-001"
+    },
+    {
+      "group": "main",
+      "id": "main--case-001--r5",
+      "repeat": 5,
+      "scenario": "case-001"
+    },
+    {
+      "group": "main",
+      "id": "main--case-002--r2",
+      "repeat": 2,
+      "scenario": "case-002"
+    },
+    {
+      "group": "main",
+      "id": "main--case-002--r3",
+      "repeat": 3,
+      "scenario": "case-002"
+    },
+    {
+      "group": "main",
+      "id": "main--case-002--r4",
+      "repeat": 4,
+      "scenario": "case-002"
+    },
+    {
+      "group": "main",
+      "id": "main--case-002--r5",
+      "repeat": 5,
+      "scenario": "case-002"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--generated-delivery--r1",
+      "repeat": 1,
+      "scenario": "generated-delivery"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--generated-delivery--r2",
+      "repeat": 2,
+      "scenario": "generated-delivery"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--generated-delivery--r3",
+      "repeat": 3,
+      "scenario": "generated-delivery"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--stale-artifact--r1",
+      "repeat": 1,
+      "scenario": "stale-artifact"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--stale-artifact--r2",
+      "repeat": 2,
+      "scenario": "stale-artifact"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--stale-artifact--r3",
+      "repeat": 3,
+      "scenario": "stale-artifact"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--rollback-preserves-job--r1",
+      "repeat": 1,
+      "scenario": "rollback-preserves-job"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--rollback-preserves-job--r2",
+      "repeat": 2,
+      "scenario": "rollback-preserves-job"
+    },
+    {
+      "group": "cleanup",
+      "id": "cleanup--rollback-preserves-job--r3",
+      "repeat": 3,
+      "scenario": "rollback-preserves-job"
+    }
+  ],
+  "schedule": [
+    {
+      "id": "main--case-001--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "enterprise--profile-policy-missing--r2",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "keyword--conditional--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--case-002--r5",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--case-002--r4",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "handoff--adopt--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "cleanup--rollback-preserves-job--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "enterprise--case-source-scope--r2",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--case-003--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "keyword--fallback--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "cleanup--stale-artifact--r2",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "cleanup--rollback-preserves-job--r2",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "keyword--refine-explicit--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--outcome-case-adapted--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "enterprise--output-collision--r3",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "enterprise--case-source-selection--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "handoff--injection--r2",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "enterprise--case-source-scope--r3",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "handoff--refine--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "keyword--refine-adaptive--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "cleanup--rollback-preserves-job--r3",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "cleanup--stale-artifact--r3",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "enterprise--profile-policy-missing--r3",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--outcome-case-counterevidence--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "enterprise--case-source-scope--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--case-002--r2",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "enterprise--profile-policy-chain--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--outcome-advised--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "keyword--denied--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "handoff--empty--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "handoff--injection--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--case-003--r3",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "enterprise--profile-policy-missing--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--case-003--r2",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "keyword--error-first--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "handoff--injection--r3",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--case-001--r5",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--case-002--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--case-001--r4",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--outcome-case-unconfirmed-blocked--r3",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "keyword--component-first--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "cleanup--generated-delivery--r3",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "keyword--refine-windowed--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--case-001--r2",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--case-002--r3",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "handoff--denied--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "keyword--no-strategy--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "main--outcome-case-unconfirmed-blocked--r2",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "enterprise--output-collision--r2",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "enterprise--output-collision--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "keyword--budget--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--outcome-not-applicable--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "enterprise--output-independent--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "cleanup--stale-artifact--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--outcome-case-unconfirmed-blocked--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "cleanup--generated-delivery--r1",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--case-001--r3",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "cleanup--generated-delivery--r2",
+      "versions": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "main--outcome-case-unconfirmed--r1",
+      "versions": [
+        "A",
+        "B"
+      ]
+    }
+  ],
+  "seed": 20261105,
+  "thresholds": {
+    "minimum_complete_quality_pairs_per_primary_case": 3,
+    "new_severe_regressions": 0,
+    "paired_time_reduction": 0.15,
+    "paired_token_reduction": 0.15
+  },
+  "versions": {
+    "A": {
+      "files": {
+        "SKILL.md": "886e06701302d261e6f770f81ad7e6cf2208c1ad619c861b25455798b356fc1c",
+        "agents/openai.yaml": "d9a93a1956e1dbe9de522cf952e4ddbb8d170ffeadc2df2bd152333651fc4410",
+        "assets/analysis-fix.template.md": "e174e87d23ec01bdbff2ba28e734912fe33581a5c26f5e005221718104f35a6e",
+        "assets/ci-self-healing-icon.png": "023eafd73a736d52ad1a490b1e0eb877eba9ce0bb1d55c1c025d50980bdc4173",
+        "assets/ci-self-healing-icon.prompt.txt": "ed891a458fbc607390d76559ee4088f3cdf36335baf60d26e76d61a3d0c60f9a",
+        "assets/delivery-resources.json": "17c0dd2967bf07e061d58a6c3aa63b8a3759238d1f0aa21b81f6fa3e810d6610",
+        "assets/execution-resources.json": "8b7624d2e0caa1b8db36556952804331998aa0a8aa1f9cc1972c650b872c0c1a",
+        "references/c-cpp-compilation.md": "204d923303cae2ca15ea6862f3b28d8e47a3c94241089bfa2adba1c12461bb13",
+        "references/candidate-verification.md": "4964d8387f53003d67f37f8691951815da6518e489d6856ad4e7ee1447798376",
+        "references/case-retrieval.md": "7f58e83ca0edc97b6b9d34128b209fc7431a44fe0426031e33cd09bfd3ca47ec",
+        "references/ci-job-failure-directory.md": "07e8b783213a095a02714a7082e38beab2fe0d0432ae042eca71836e66c96e30",
+        "references/collaboration.md": "c916207f7d9c50c66e920d6e3f7457c912bc2c8263d01d30bacc2ca71c54b356",
+        "references/core-contracts.md": "a3c5436012d1f0efadccf88ec15f77b2aa78acb7bf358a88fbdafc6c9a1e4f6d",
+        "references/dependency-diagnosis-and-repair.md": "657b947509565bccdf21f3430a16fc065660cac4c4f8a319fc96b5498b1cea1d",
+        "references/diagnosis-and-repair.md": "71b76e5a13ff7689da5bec913435403c5d5ec2e697bff760e36299e14e059bcc",
+        "references/enterprise-policy.md": "8b22b43c6edc96788338ebf4a6ea89dc62c956041752e330fccbbdf3bbdf433a",
+        "references/execution-modes.md": "18a0e04437a6716c91751edb79100b91ef637a3a36ff6173e838c9a02aff2109",
+        "references/failure-classification.md": "644fde4022aeaeb384a61a0b6ffaff42f0a294ccfb4c85769bffdba46360d8e6",
+        "references/failure-evidence-extraction.md": "478582d6d00e99365e9a5b55bdf33b85809f93e8f3d38481791debaf42422848",
+        "references/invocation-inputs.md": "e43fe627ed03fa919ca437c4bbba3472e4113accadbeec74249fa67fe37072b1",
+        "references/java-maven-compilation.md": "0e380f468ad1af3f6c235e94c6bb1c4eb65f14e772732120fbadf6283cae46b6",
+        "references/log-evidence-tool.md": "08d4212e8877f7c8a4ff72ed74e5ea8d2f94a0070a0e6ad32bf87903cff07924",
+        "references/output-delivery.md": "e0075952c4d38a4bdf06bcaac05890a9791ab75639ffed20ff6f89305c9991e4",
+        "references/pipeline-outcomes.md": "cd19e1336807767944af45eefc58594c67605a7072e37e99fbef50be589d9411",
+        "references/provider-contract.md": "fec834bd991ca70e74267cc2dc541a0e966bd90fe111bba6b170868a0303f862",
+        "references/providers/github-actions.md": "1507480aa0ddc2b23124ff88d842494566a4a2af00109e290cdfe981f5bf8268",
+        "references/providers/provider-access.md": "f71de417a2ef18aa76364c92cf2c3f933a652422fcc18f0a7d895ee4ee777c90",
+        "references/remote-verification.md": "a903ed227a1c0b614e44cd22359b121155a5632fa4dfd0453092b7e5d25afecc",
+        "references/repair-admission.md": "eefeda369f0d905f13d8a4f638b24f5155b1363fdddc16bc4e2a2b4c3fd32b46",
+        "references/result-report.md": "7ebed409e02f26b5281a1b362cd10ec5ce38cae3f627fadf0f35b7b02752782a",
+        "references/verification-failures.md": "579b73786925a2d9e77f3e4aacc979e3342f69faec4b4ec956b3910472944905",
+        "references/workspace-cleanup.md": "b0305ce24e4c263c6fe736abca7a774c809757c79c65eb67517739a5b3818f9a",
+        "references/workspace-recovery.md": "8cb67252b7eb5b299819f7bfc26601a77a72a3753776289565f9546c82f60612",
+        "scripts/file_change_check.py": "1bef3065a394e5081b15955e5c6f59cd29b49738f777601c9811e2c86e3fc650",
+        "scripts/log_evidence.py": "ebc2e86f44acfcbd83b04950dac634c47c9ca19c472f5b6a75e1c4265d810c7e",
+        "scripts/report_check.py": "836f20a8ecba1af1e0e6836f028ad9bdb513ee8586b67cd4dc3567b3115b1ff0",
+        "scripts/workspace_check.py": "34ef6fe2295c11e13bb69b19d096b8646443e1fba0deda023c5e98a0e66eae4d"
+      },
+      "sha256": "e859586fe1e5ec9e7f11cbdeb6b88649fc37a50bf9d580ebdfae6140bed6db31",
+      "source": "<REPO>/evals/ci-self-healing/legacy/cleanup-v7/skill"
+    },
+    "B": {
+      "files": {
+        "SKILL.md": "389326c10d2e7b0cb77f0b9ffaced5bc62980d1c0846db3bd430e638a71a0a39",
+        "agents/openai.yaml": "d9a93a1956e1dbe9de522cf952e4ddbb8d170ffeadc2df2bd152333651fc4410",
+        "assets/analysis-fix.template.md": "5e1c577a459d78af294aca3f693f782154c5c5c0711fdc21a49181f34d6fba4f",
+        "assets/ci-self-healing-icon.png": "023eafd73a736d52ad1a490b1e0eb877eba9ce0bb1d55c1c025d50980bdc4173",
+        "assets/ci-self-healing-icon.prompt.txt": "ed891a458fbc607390d76559ee4088f3cdf36335baf60d26e76d61a3d0c60f9a",
+        "assets/delivery-resources.json": "17c0dd2967bf07e061d58a6c3aa63b8a3759238d1f0aa21b81f6fa3e810d6610",
+        "assets/execution-resources.json": "f1aae3f50a8ce1c1de673da8d50bab5dec1f8a9a073e22ff1b41d12c8a18b69a",
+        "references/c-cpp-compilation.md": "204d923303cae2ca15ea6862f3b28d8e47a3c94241089bfa2adba1c12461bb13",
+        "references/candidate-verification.md": "d9c54c57619e61957e367d838ac3b06dfe4b5cf6027d758553c1b36abc57d62c",
+        "references/case-retrieval.md": "495c6002e8ae044322a528821c203d933c6f7034c018f44d60a90c98fea37251",
+        "references/ci-job-failure-directory.md": "29eb82b6908645ac2885e49507001a7e3a3ae352ebe8260bc4f7e819cc23ac05",
+        "references/collaboration.md": "c916207f7d9c50c66e920d6e3f7457c912bc2c8263d01d30bacc2ca71c54b356",
+        "references/core-contracts.md": "0074181e8d737401cdb18d292075723daf97451bf7cd08f3091e9ded5254100e",
+        "references/dependency-diagnosis-and-repair.md": "657b947509565bccdf21f3430a16fc065660cac4c4f8a319fc96b5498b1cea1d",
+        "references/diagnosis-and-repair.md": "1721abecb09b1c003307801359a0483edfa15dba29d66891269c7c7f7976fb49",
+        "references/enterprise-policy.md": "8b22b43c6edc96788338ebf4a6ea89dc62c956041752e330fccbbdf3bbdf433a",
+        "references/execution-modes.md": "73749cbe495402eeaef0db8baa6626340a632f461f8003c19d8f0a8fa147bcfe",
+        "references/failure-classification.md": "644fde4022aeaeb384a61a0b6ffaff42f0a294ccfb4c85769bffdba46360d8e6",
+        "references/failure-evidence-extraction.md": "478582d6d00e99365e9a5b55bdf33b85809f93e8f3d38481791debaf42422848",
+        "references/invocation-inputs.md": "e43fe627ed03fa919ca437c4bbba3472e4113accadbeec74249fa67fe37072b1",
+        "references/java-maven-compilation.md": "0e380f468ad1af3f6c235e94c6bb1c4eb65f14e772732120fbadf6283cae46b6",
+        "references/log-evidence-tool.md": "08d4212e8877f7c8a4ff72ed74e5ea8d2f94a0070a0e6ad32bf87903cff07924",
+        "references/output-delivery.md": "48e3648dc7c5b5f115945c129429ee90f8a8c666deb9e4a31ca879ae58d32513",
+        "references/pipeline-outcomes.md": "f232f33a1802bf25b56e081b5c4144fa365e727e7eb45cf8f8c3e4bab7407d54",
+        "references/provider-contract.md": "fec834bd991ca70e74267cc2dc541a0e966bd90fe111bba6b170868a0303f862",
+        "references/providers/github-actions.md": "1507480aa0ddc2b23124ff88d842494566a4a2af00109e290cdfe981f5bf8268",
+        "references/providers/provider-access.md": "f71de417a2ef18aa76364c92cf2c3f933a652422fcc18f0a7d895ee4ee777c90",
+        "references/remote-verification.md": "a903ed227a1c0b614e44cd22359b121155a5632fa4dfd0453092b7e5d25afecc",
+        "references/repair-admission.md": "c84cad1f7665f552a90c551ab9ee4de84bb38ec17f6b9c53063666e6431118ea",
+        "references/result-report.md": "d651a6c4b9bfd8f55c80f9c6cd1c7102a50d9a724c72c83c27ac5ca170669649",
+        "references/verification-failures.md": "a9b015aa5416e3c9d63b1299939f7f2c5e7c5bba44fdfea0aef6d5f9ccc367df",
+        "scripts/file_change_check.py": "1bef3065a394e5081b15955e5c6f59cd29b49738f777601c9811e2c86e3fc650",
+        "scripts/log_evidence.py": "ebc2e86f44acfcbd83b04950dac634c47c9ca19c472f5b6a75e1c4265d810c7e",
+        "scripts/report_check.py": "836f20a8ecba1af1e0e6836f028ad9bdb513ee8586b67cd4dc3567b3115b1ff0"
+      },
+      "sha256": "c9c06850241f895b96db9808a82898ddefce17fcd0b859460fa6f138cd3f6f51",
+      "source": "<REPO>/skills/ci-self-healing"
+    }
+  }
+}

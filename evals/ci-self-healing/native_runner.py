@@ -203,9 +203,15 @@ def responses_completion(rows, start, end):
         "turn.started", "model.run.started", "model.cycle.started", "model.validation.finished",
         "model.cycle.finished", "model.run.finished", "turn.finished")]
     oid = start["operation_id"]
-    sequence = [ts, rs, cs, start, valid, end, ce, re, te]
+    # Native clients emit validation either just before or just after the
+    # exchange finishes. Both must belong to this exchange and finish inside
+    # its cycle; neither ordering is proof of a provider wire terminal event.
+    sequence = [ts, rs, cs, start, end, ce, re, te]
     if any(a["sequence"] >= b["sequence"] for a, b in zip(sequence, sequence[1:])):
         raise EvalError("native lifecycle ordering mismatch")
+    if not start["sequence"] < valid["sequence"] < ce["sequence"]:
+        raise EvalError("native validation ordering mismatch")
+    sequence.append(valid)
     turn_id = ts.get("turn_id")
     if not isinstance(turn_id, str) or not turn_id or any(e.get("turn_id") != turn_id for e in sequence):
         raise EvalError("native lifecycle turn identity mismatch")
@@ -229,12 +235,18 @@ def responses_completion(rows, start, end):
         raise EvalError("native Responses lifecycle did not establish accepted completion")
 
 
-def exchange_receipt(raw, session_id, model):
+def exchange_receipt(raw, session_id, model, *, expected_response_model=None):
     """Verify a fresh, complete native trajectory, not model self-description.
 
     This counts Chrys exchanges, not opaque retries inside the provider SDK.
     Initial support is deliberately one successful exchange and no tools.
+    A caller may pin a separately known response model ID; aliases are never
+    inferred from provider output, prefixes or a successful HTTP response.
     """
+    if expected_response_model is not None and (
+            not isinstance(expected_response_model, str) or not expected_response_model.strip()):
+        raise EvalError("expected response model must be an explicit nonempty ID")
+    response_model = model if expected_response_model is None else expected_response_model
     rows = [strict_json(line) for line in raw.splitlines() if line.strip()]
     if not rows or len(rows) > 20000:
         raise EvalError("missing or oversized native trajectory")
@@ -284,7 +296,7 @@ def exchange_receipt(raw, session_id, model):
     start, end = starts[oid], ends[oid]
     terminal = end["payload"]
     if (start["sequence"] >= end["sequence"] or start["payload"].get("request_model") != model
-            or terminal.get("response_model") != model or terminal.get("outcome") != "success"
+            or terminal.get("response_model") != response_model or terminal.get("outcome") != "success"
             or not isinstance(terminal.get("response_id"), str) or not terminal["response_id"]):
         raise EvalError("native model completion/identity is not confirmed")
     reason = terminal.get("finish_reason")
@@ -293,6 +305,7 @@ def exchange_receipt(raw, session_id, model):
     elif reason != "stop":
         raise EvalError("native model stopped abnormally")
     return {"status": "validated", "session_id": session_id, "exchange_count": 1,
+            "request_model": start["payload"]["request_model"],
             "response_model": terminal["response_model"], "response_id": terminal["response_id"],
             "finish_reason": reason, "completion_basis": "chrys-responses-lifecycle" if reason is None else "explicit-stop",
             "provider_terminal_status": "not_recorded", "trajectory_sha256": digest(raw),

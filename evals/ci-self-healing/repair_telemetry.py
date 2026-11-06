@@ -1,4 +1,8 @@
-"""HTTP transport timing only: never inspect headers, URLs, prompts or bodies."""
+"""HTTP timing only; optional routing filter never logs request content.
+
+The caller may select its model origin. Headers, URLs, prompts and bodies are
+never emitted. Unselected requests bypass both timing and the model-only gate.
+"""
 
 from contextlib import contextmanager
 import time
@@ -6,7 +10,7 @@ import threading
 
 
 @contextmanager
-def transport_timing(emit, before_send=None):
+def transport_timing(emit, before_send=None, request_filter=None):
     import httpx
     original_async, original_sync = httpx.AsyncClient.send, httpx.Client.send
     counter = 0
@@ -65,6 +69,8 @@ def transport_timing(emit, before_send=None):
             self.inner.close()
 
     async def send_async(client, request, **kwargs):
+        if request_filter is not None and not request_filter(request):
+            return await original_async(client, request, **kwargs)
         record = begin()
         try:
             response = await original_async(client, request, **kwargs)
@@ -79,6 +85,8 @@ def transport_timing(emit, before_send=None):
             raise
 
     def send_sync(client, request, **kwargs):
+        if request_filter is not None and not request_filter(request):
+            return original_sync(client, request, **kwargs)
         record = begin()
         try:
             response = original_sync(client, request, **kwargs)

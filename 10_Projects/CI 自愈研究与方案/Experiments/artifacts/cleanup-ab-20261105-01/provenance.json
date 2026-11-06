@@ -1,0 +1,93 @@
+{
+  "experiment": "cleanup-ab-20261105-01",
+  "raw_directory": "evals/ci-self-healing/runs/cleanup-ab-20261105-01",
+  "source_files": {
+    "analysis/supplement-metrics.json": {
+      "sha256": "d0c0abb36deccd94256df51455dab73c631fa9daf0d989078fe6355efcc6beb6",
+      "bytes": 49270
+    },
+    "analysis/paired-comparison-with-audit.csv": {
+      "sha256": "a03ec15e31f2f6cca35e5a5e053394ca6e238ef0d596326e7715c10ed3bdab6c",
+      "bytes": 9624
+    },
+    "analysis/finding-classification.json": {
+      "sha256": "5b8da3933714f35789820b906f055af6af94ce4dd2e315cf70e08235226d3b3c",
+      "bytes": 10305
+    },
+    "analysis/offline-audit.json": {
+      "sha256": "2efdc9b6a3bd4a21c164464714fccf033fefb3212d0a87d5c59474dc7c26507d",
+      "bytes": 304243
+    },
+    "analysis-contract.json": {
+      "sha256": "88c0b132a9a54107aee27346f83359beca78362a3155d94755e3fedf047ccac3",
+      "bytes": 744
+    },
+    "concurrency-policy.json": {
+      "sha256": "7f0cacbdccc7f3efd5e9e5325d6883218ce13124713a3a54692f917053d51036",
+      "bytes": 271
+    },
+    "plan.json": {
+      "sha256": "8952ed8e832bbd3f9db1cd7da220c96d7d685d86b7868372500b90d98a6862a5",
+      "bytes": 23855
+    },
+    "analysis/final-integrity.json": {
+      "sha256": "cac418f0a51075b826fa3f4dbb8611f74cb3f443be8e3843fc630a36e6aff68d",
+      "bytes": 267380
+    },
+    "analysis/offline_audit.py": {
+      "sha256": "cd9dddf64b9fd477742b4faf68aab439f0172e28f1c1b24a275fec29e370bf8f",
+      "bytes": 9854
+    },
+    "analysis/supplement_metrics.py": {
+      "sha256": "644f8698996ce87d6709efdb604b5664f37050edb7645e94af96a42c6a019714",
+      "bytes": 5547
+    },
+    "analysis/final_integrity.py": {
+      "sha256": "1f540a059638e8c1c3d6faf979cec019f538f2fb1f6a3f72423ef82848d7e3f9",
+      "bytes": 7872
+    },
+    "analysis/raw-evidence-manifest.json": {
+      "sha256": "af709f2da8f5f33ffe7c8a06d673d89783d10aae633c0b1f8cd0f4177eea89e6",
+      "bytes": 10162070
+    },
+    "analysis/summary.json": {
+      "sha256": "de79b288a3be5d98f128657c6e80733c25ec72db7d0af6997f99efaea008b0f5",
+      "bytes": 1897622
+    },
+    "analysis/final-report.md": {
+      "sha256": "0e665d15bdbbb265022e815d655d201335b6d6fb1314c9c18fdbcc3552ad626e",
+      "bytes": 10597
+    },
+    "freeze.json": {
+      "sha256": "6714d8a2f0f337ee33874a82dd52ffd5e32b142d299c5054589ca2318473b276",
+      "bytes": 8459
+    },
+    "historical-preservation.json": {
+      "sha256": "b48f837d3f23d6b23bdec6999b3d1375b09aaf5d5153873584a0a672f01ab2e8",
+      "bytes": 6631910
+    },
+    "offline-suite-result.json": {
+      "sha256": "ce73b26056cd1e03b175ec7b3865f262cc7d38fc0f36b7760ba337487d002dcb",
+      "bytes": 713
+    },
+    "offline-focused-result.json": {
+      "sha256": "c021cbb1fd7acdcd2ad6d26c67abdd4c6a269419bcb93a097e8030702bf49894",
+      "bytes": 230
+    },
+    "offline-preflight.json": {
+      "sha256": "7646bc5e8faac3ce709871f7a67514a52ea71b6042534d332ec0a4026c7e7cb5",
+      "bytes": 560
+    },
+    "paired-input-audit-v2.json": {
+      "sha256": "14966dd7c0ce0b8fc0f04ca11cfee64ba9547cf00b1145a546e6e2d64cf1c712",
+      "bytes": 4766
+    }
+  },
+  "transformations": [
+    "Exported text replaces the repository absolute path with <REPO> and the home path with <HOME>.",
+    "integrity-summary.json selects public completion/preservation fields; full per-trial receipts remain local.",
+    "methods/*.py preserve the executed source bytes and require the original raw-run analysis layout.",
+    "Published CSV line endings are normalized from CRLF to LF; all parsed cells are unchanged."
+  ],
+  "raw_results_modified": false
+}

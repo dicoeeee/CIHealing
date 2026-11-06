@@ -1,0 +1,8 @@
+{
+  "execution_workers": 4,
+  "limit": 6,
+  "preexisting_icode_processes_counted": false,
+  "reason": "user clarified concurrency scope before any model execution",
+  "review_workers": 2,
+  "scope": "this cleanup A/B experiment, including execution/review/supplements"
+}

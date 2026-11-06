@@ -10,7 +10,7 @@ import json
 from collections import Counter
 
 from common import EvalError, digest, json_bytes
-from repair_support import EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT
+from repair_support import EXECUTION_CONTRACT, MODULAR_EXECUTION_CONTRACT, MERGED_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT
 
 
 FORMAT = "ci-review-projection-v2"
@@ -67,6 +67,23 @@ MERGED_SECTIONS["references/repair-and-verification.md"] = [
     "候选修改前的准入记录", "决定修复准入", "结果判定",
 ]
 
+# v7 redistributes existing clauses by loading phase. Never insert an unread
+# resource into a packet: this map only projects confirmed actual read events.
+MODULAR_SECTIONS = {name: list(headings) for name, headings in MERGED_SECTIONS.items()
+                    if name != "references/repair-and-verification.md"}
+MODULAR_SECTIONS["references/repair-admission.md"] = [
+    "修复依据", *SPLIT_SECTIONS["references/repair-basis.md"],
+    "候选修改前的准入记录", "决定修复准入",
+]
+MODULAR_SECTIONS["references/candidate-verification.md"] = ["构建与更新候选", "分层验证", "完整成功条件"]
+MODULAR_SECTIONS["references/pipeline-outcomes.md"] = ["结果判定"]
+MODULAR_SECTIONS["references/output-delivery.md"] = ["报告适用范围"]
+
+CANDIDATE_SECTIONS = {name: list(headings) for name, headings in MODULAR_SECTIONS.items()
+                      if name not in {"references/workspace-cleanup.md", "references/workspace-recovery.md"}}
+CANDIDATE_SECTIONS["references/execution-modes.md"] = [
+    "基线与候选恢复", "候选与验证有效性", "CI Job 工作空间交付"]
+
 
 def sections(text, wanted):
     lines = text.splitlines(keepends=True)
@@ -98,7 +115,9 @@ def project_packet(packet, trial_prefix=None):
     section_map = {SPLIT_EXECUTION_CONTRACT: SPLIT_SECTIONS,
                    POLICY_EXECUTION_CONTRACT: POLICY_SECTIONS,
                    INPUT_EXECUTION_CONTRACT: INPUT_SECTIONS,
-                   EXECUTION_CONTRACT: MERGED_SECTIONS}.get(execution.get("contract"), SECTIONS)
+                   MERGED_EXECUTION_CONTRACT: MERGED_SECTIONS,
+                   MODULAR_EXECUTION_CONTRACT: MODULAR_SECTIONS,
+                   EXECUTION_CONTRACT: CANDIDATE_SECTIONS}.get(execution.get("contract"), SECTIONS)
     confirmed = {(r["seq"], r["resource"]) for r in execution.get("resource_reads", []) if r.get("complete") is True}
     projection = []
     for event in value["events"]:

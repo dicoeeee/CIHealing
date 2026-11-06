@@ -59,7 +59,9 @@ def load_config(path):
 
 
 def engine_digest():
-    paths = sorted([*ROOT.glob("*.py"), *ROOT.glob("environment/*.py")])
+    paths = sorted([*ROOT.glob("*.py"), *ROOT.glob("environment/*.py"),
+                    *(p for p in (ROOT / "legacy").rglob("*")
+                      if p.is_file() and "__pycache__" not in p.parts)])
     return digest(json_bytes({p.relative_to(ROOT).as_posix(): digest(read_regular(p)) for p in paths}))
 
 

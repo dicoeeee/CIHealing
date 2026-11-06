@@ -1,14 +1,19 @@
+---
+ai_generated: true
+reviewed: false
+---
+
 # GitHub Actions 证据访问
 
 ## 身份与范围
 
 Provider ID 为 `github_actions`，适用于可信调用明确指定的 GitHub Actions 运行。主机和 `OWNER/REPO` 来自该目标的可信信息；源码托管在 GitHub 不证明 CI 使用 GitHub Actions。GitHub Enterprise Server 的端点支持还须匹配实际服务版本。
 
-本文件提供只读接入说明，不是已部署的适配器。访问顺序、缺口与边界统一按 [Provider 访问](provider-access.md)；逻辑能力使用 `identify_run`、`inspect_run` 和 `fetch_failure_evidence`。
+本文件提供只读接入说明，不是已部署的适配器。访问顺序、缺口与边界统一按 Provider 访问；逻辑能力使用 `identify_run`、`inspect_run` 和 `fetch_failure_evidence`。
 
 ## Local Evidence
 
-优先读取调用方已提供的 run/Job/Attempt metadata 和日志。本 Provider 不假设固定日志文件名；宿主已选择[失败现场目录场景](../ci-job-failure-directory.md)时复用该布局。核对主机、仓库、运行、重试与实际源码状态，已有证据足够时无需调用下方工具。
+优先读取调用方已提供的 run/Job/Attempt metadata 和日志。本 Provider 不假设固定日志文件名；宿主已选择失败现场目录场景时复用该布局。核对主机、仓库、运行、重试与实际源码状态，已有证据足够时无需调用下方工具。
 
 ## MCP
 
@@ -37,6 +42,6 @@ gh api --hostname HOST --method GET 'repos/OWNER/REPO/actions/jobs/JOB_ID/logs'
 
 ## 访问不可用
 
-`gh` 未安装、现有凭据不可访问目标、Actions 能力未暴露或日志不可用时，按[不可用与交付](provider-access.md#不可用与交付)记录缺口。404 本身不足以区分无权限与目标不存在；不自动登录或改认证，不通过重跑来生成新日志冒充原失败。
+`gh` 未安装、现有凭据不可访问目标、Actions 能力未暴露或日志不可用时，按不可用与交付记录缺口。404 本身不足以区分无权限与目标不存在；不自动登录或改认证，不通过重跑来生成新日志冒充原失败。
 
 本文件的命令依据官方文档；实际宿主的 MCP、CLI 权限、重定向行为和目标日志仍须以实际执行证据核对，示例不证明当前接入可用。本文件不声明远端发布或完整适配器已通过验收。

@@ -16,13 +16,17 @@ RECOVERY_EXECUTION_CONTRACT = "skill-execution-v2"
 SPLIT_EXECUTION_CONTRACT = "skill-execution-v3"
 POLICY_EXECUTION_CONTRACT = "skill-execution-v4"
 INPUT_EXECUTION_CONTRACT = "skill-execution-v5"
-EXECUTION_CONTRACT = "skill-execution-v6"
-INPUT_EXECUTION_CONTRACTS = {INPUT_EXECUTION_CONTRACT, EXECUTION_CONTRACT}
+MERGED_EXECUTION_CONTRACT = "skill-execution-v6"
+MODULAR_EXECUTION_CONTRACT = "skill-execution-v7"
+EXECUTION_CONTRACT = "skill-execution-v8"
+MODULAR_EXECUTION_CONTRACTS = {MODULAR_EXECUTION_CONTRACT, EXECUTION_CONTRACT}
+INPUT_EXECUTION_CONTRACTS = {INPUT_EXECUTION_CONTRACT, MERGED_EXECUTION_CONTRACT, *MODULAR_EXECUTION_CONTRACTS}
 POLICY_EXECUTION_CONTRACTS = {POLICY_EXECUTION_CONTRACT, *INPUT_EXECUTION_CONTRACTS}
 SEPARATE_BASIS_EXECUTION_CONTRACTS = {SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT}
 SPLIT_EXECUTION_CONTRACTS = {SPLIT_EXECUTION_CONTRACT, *POLICY_EXECUTION_CONTRACTS}
-RECOVERY_EXECUTION_CONTRACTS = {RECOVERY_EXECUTION_CONTRACT, *SPLIT_EXECUTION_CONTRACTS}
-EXECUTION_CONTRACTS = {LEGACY_EXECUTION_CONTRACT, *RECOVERY_EXECUTION_CONTRACTS}
+RECOVERY_EXECUTION_CONTRACTS = {RECOVERY_EXECUTION_CONTRACT, *(SPLIT_EXECUTION_CONTRACTS - {EXECUTION_CONTRACT})}
+CLEANUP_EXECUTION_CONTRACTS = {LEGACY_EXECUTION_CONTRACT, *RECOVERY_EXECUTION_CONTRACTS}
+EXECUTION_CONTRACTS = {*CLEANUP_EXECUTION_CONTRACTS, EXECUTION_CONTRACT}
 EXECUTION_RESOURCE_DECLARATION = {"schema": "ci-skill-execution-resources/v1", "contract": EXECUTION_CONTRACT}
 ADMISSION_CHANNEL_CONTRACT = "agent-message-v1"
 DELIVERY_CONTRACT = "stop-artifact-v1"
@@ -126,7 +130,8 @@ def execution_contract(skill):
     declaration = skill / "assets/execution-resources.json"
     if not declaration.exists() and not declaration.is_symlink():
         entry = read_regular(skill / "SKILL.md").decode()
-        if any(name in entry for name in ("references/repair-basis.md", "references/candidate-verification.md")):
+        if any(name in entry for name in ("references/repair-basis.md", "references/candidate-verification.md",
+                                         "references/repair-admission.md", "references/pipeline-outcomes.md")):
             raise EvalError("split Skill resource declaration missing")
         return RECOVERY_EXECUTION_CONTRACT
     value = read_json(declaration)
@@ -163,11 +168,11 @@ def skill_tool_notice():
             "不通过文件或 shell 工具直接访问包内资源/脚本。"
             "脚本名保留 scripts/ 前缀，命令行参数按原顺序传入 arguments 数组，cwd 使用实际绝对目录。"
             '\n原生调用示例（查看帮助，不是修复决定）：run_skill_script '
-            '{"skill_name":"ci-self-healing","script_name":"scripts/workspace_check.py",'
-            '"arguments":["capture","--help"]}。'
+            '{"skill_name":"ci-self-healing","script_name":"scripts/report_check.py",'
+            '"arguments":["--help"]}。'
             "其他脚本同样替换 script_name 和 arguments；不要在参数中加入 python、shell 或脚本绝对路径。"
             "脚本结果需保留完整 JSON 和退出码；资源或结果被截断时补齐，不以摘要代替。"
-            "目标仓库的普通文件读写、搜索、构建和清理仍用相应普通工具。\n")
+            "目标仓库的普通文件读写、搜索和构建仍用相应普通工具。\n")
 
 
 def budget_notice(seconds, now=None):

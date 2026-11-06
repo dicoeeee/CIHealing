@@ -1,0 +1,61 @@
+{
+  "checked_at": "2026-11-05T15:34:38.030036+00:00",
+  "errors": [],
+  "historical": {
+    "boundary": "all historical files compared by size/mtime/mode; six critical files also SHA256 checked",
+    "critical_hash_changes": [],
+    "files": 40123,
+    "metadata_changes": []
+  },
+  "skill_hashes": {
+    "A": {
+      "expected": "e859586fe1e5ec9e7f11cbdeb6b88649fc37a50bf9d580ebdfae6140bed6db31",
+      "frozen": "e859586fe1e5ec9e7f11cbdeb6b88649fc37a50bf9d580ebdfae6140bed6db31",
+      "source": "e859586fe1e5ec9e7f11cbdeb6b88649fc37a50bf9d580ebdfae6140bed6db31"
+    },
+    "B": {
+      "expected": "c9c06850241f895b96db9808a82898ddefce17fcd0b859460fa6f138cd3f6f51",
+      "frozen": "c9c06850241f895b96db9808a82898ddefce17fcd0b859460fa6f138cd3f6f51",
+      "source": "c9c06850241f895b96db9808a82898ddefce17fcd0b859460fa6f138cd3f6f51"
+    }
+  },
+  "toolchain_differences": {},
+  "concurrency": {
+    "events": 472,
+    "external_processes_excluded": true,
+    "peaks": {
+      "execute": 4,
+      "execute_A": 2,
+      "execute_B": 2,
+      "review": 2,
+      "total": 6
+    },
+    "remaining_experiment_leases": [],
+    "unreleased": [],
+    "violations": []
+  },
+  "phase_records": {
+    "count": 236,
+    "problems": {
+      "duplicate": [],
+      "extra": [],
+      "missing": []
+    }
+  },
+  "raw_evidence_files": 49008,
+  "trial_count": 118,
+  "execute_max_seconds": 510.514,
+  "review_max_seconds": 402.544,
+  "execute_process_statuses": [
+    "completed"
+  ],
+  "review_process_statuses": [
+    "completed"
+  ],
+  "review_models": [
+    [
+      "deepseek-v4.1-flash",
+      "deepseek-v4-1-flash-261017"
+    ]
+  ]
+}

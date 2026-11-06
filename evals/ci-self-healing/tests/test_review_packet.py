@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import EvalError, read_regular
 from review_packet import project_packet, sections
-from repair_support import EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT
+from repair_support import EXECUTION_CONTRACT, MODULAR_EXECUTION_CONTRACT, MERGED_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT
 
 
 def expand(value, pool):
@@ -115,9 +115,10 @@ class PacketTests(unittest.TestCase):
 
     def test_split_guides_preserve_their_own_verbatim_semantic_clauses(self):
         skill = Path(__file__).resolve().parents[3] / "skills/ci-self-healing"
-        for resource in ("references/diagnosis-and-repair.md", "references/workspace-recovery.md",
+        for resource in ("references/diagnosis-and-repair.md",
                          "references/candidate-verification.md", "references/verification-failures.md", "references/collaboration.md",
-                         "references/enterprise-policy.md", "references/repair-and-verification.md", "references/execution-modes.md"):
+                         "references/enterprise-policy.md", "references/repair-admission.md", "references/execution-modes.md",
+                         "references/pipeline-outcomes.md"):
             with self.subTest(resource=resource):
                 p = self.packet(resource)
                 body = read_regular(skill / resource).decode()
@@ -130,17 +131,56 @@ class PacketTests(unittest.TestCase):
                     lines = body.splitlines(keepends=True)
                     self.assertEqual(clause["text"], "".join(lines[clause["start_line"] - 1:clause["end_line"]]))
                 self.assertEqual(q["events"][2:], p["events"][2:])
-                if resource.endswith("repair-and-verification.md"):
+                if resource.endswith("repair-admission.md"):
                     self.assertIn("语义方向歧义", [c["heading"] for c in clauses])
                 if resource.endswith("workspace-recovery.md"):
                     self.assertIn("基准缺失或时序错误的恢复", [c["heading"] for c in clauses])
 
     def test_missing_merged_semantic_clause_is_not_silently_projected_away(self):
-        p = self.packet("references/repair-and-verification.md")
+        p = self.packet("references/repair-admission.md")
         p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
         p["events"][1]["payload"]["result"] = "# Missing basis\n"
         with self.assertRaisesRegex(EvalError, "clause missing"):
             project_packet(p)
+
+    def test_v6_frozen_projection_keeps_merged_result_and_has_no_v7_requirements(self):
+        from review_packet import MERGED_SECTIONS
+        resource = "references/repair-and-verification.md"
+        body = "".join("## " + h + "\nfrozen v6 clause\n" for h in MERGED_SECTIONS[resource])
+        p = self.packet(resource)
+        p["deterministic"]["execution_checks"]["contract"] = MERGED_EXECUTION_CONTRACT
+        p["events"][1]["payload"]["result"] = body
+        clauses = project_packet(p)["events"][1]["payload"]["result"]["verbatim_clauses"]
+        self.assertEqual([c["heading"] for c in clauses], MERGED_SECTIONS[resource])
+        self.assertEqual("".join(c["text"] for c in clauses), body)
+        p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
+        self.assertEqual(project_packet(p)["events"], p["events"])
+
+    def test_v7_success_clause_is_projected_only_after_actual_candidate_guide_read(self):
+        resource = "references/candidate-verification.md"
+        body = read_regular(Path(__file__).resolve().parents[3] / "skills/ci-self-healing" / resource).decode()
+        p = self.packet(resource)
+        p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
+        p["events"][1]["payload"]["result"] = body
+        q = project_packet(p)
+        self.assertIn("完整成功条件", [c["heading"] for c in q["events"][1]["payload"]["result"]["verbatim_clauses"]])
+        p["deterministic"]["execution_checks"]["resource_reads"][0]["complete"] = False
+        self.assertEqual(project_packet(p)["events"], p["events"])
+
+    def test_v7_stop_outcome_projection_does_not_invent_candidate_read(self):
+        resource = "references/pipeline-outcomes.md"
+        body = read_regular(Path(__file__).resolve().parents[3] / "skills/ci-self-healing" / resource).decode()
+        p = self.packet(resource)
+        p["deterministic"]["execution_checks"]["contract"] = EXECUTION_CONTRACT
+        p["events"][1]["payload"]["result"] = body
+        p["events"] = p["events"][:2]
+        q = project_packet(p)
+        self.assertEqual(len(q["events"]), 2)
+        clauses = q["events"][1]["payload"]["result"]["verbatim_clauses"]
+        self.assertEqual([c["heading"] for c in clauses], ["结果判定"])
+        self.assertIn("明确修复方案", clauses[0]["text"])
+        read_names = [e["payload"].get("args", {}).get("resource_name") for e in q["events"]]
+        self.assertNotIn("references/candidate-verification.md", read_names)
 
     def test_historical_split_basis_projection_is_unchanged(self):
         headings = ["目标行为与证据", "选择修复位置", "重要反证", "语义方向歧义", "完整候选与缺口"]
@@ -192,12 +232,14 @@ class PacketTests(unittest.TestCase):
         from review import build_prompt, schema
         p = self.packet()
         original_schema = schema()
-        for contract in (SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, EXECUTION_CONTRACT):
+        for contract in (SPLIT_EXECUTION_CONTRACT, POLICY_EXECUTION_CONTRACT, MERGED_EXECUTION_CONTRACT, INPUT_EXECUTION_CONTRACT, MODULAR_EXECUTION_CONTRACT, EXECUTION_CONTRACT):
             p["deterministic"]["execution_checks"]["contract"] = contract
             prompt = build_prompt(p)
             self.assertEqual("当前 v4 准入评审" in prompt, contract == POLICY_EXECUTION_CONTRACT)
             self.assertEqual("当前 v5 准入评审" in prompt, contract == INPUT_EXECUTION_CONTRACT)
-            self.assertEqual("当前 v6 准入评审" in prompt, contract == EXECUTION_CONTRACT)
+            self.assertEqual("当前 v6 准入评审" in prompt, contract == MERGED_EXECUTION_CONTRACT)
+            self.assertEqual("当前 v7 准入评审" in prompt, contract == MODULAR_EXECUTION_CONTRACT)
+            self.assertEqual("当前 v8 准入评审" in prompt, contract == EXECUTION_CONTRACT)
         self.assertEqual(schema(), original_schema)
 
     def test_v5_projects_input_and_stop_routes_without_changing_v4_projection(self):

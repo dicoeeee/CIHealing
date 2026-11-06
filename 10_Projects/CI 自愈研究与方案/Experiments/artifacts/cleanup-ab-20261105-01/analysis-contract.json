@@ -1,0 +1,16 @@
+{
+  "extra_notes": "last successful build timestamp is only a landmark until required verification coverage is established",
+  "minimum_complete_quality_pairs_each": 3,
+  "missing_usage": "null; do not impute zero",
+  "performance_estimator": "median paired fractional reduction within each case; equally weighted across the two cases",
+  "primary_cases": [
+    "case-001",
+    "case-002"
+  ],
+  "quality": "common outcome checks and independent review excluding loading_order; raw version conformance remains separately available",
+  "repeats": "no automatic replay of started phases",
+  "serious_regressions_allowed": 0,
+  "source_evidence": "immutable execution/review/session records",
+  "time_threshold": 0.15,
+  "token_threshold": 0.15
+}

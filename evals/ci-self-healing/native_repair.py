@@ -147,14 +147,14 @@ def tool_identity(config):
                 "cache_sha256": digest(json_bytes(cache))}
 
 
-def doctor(config, output=None):
+def doctor(config, output=None, *, skill_source=None):
     if platform.system() != "Darwin" or not Path("/usr/bin/sandbox-exec").is_file():
         raise EvalError("native repair needs macOS sandbox-exec")
     versions = tool_identity(config)
     context = tempfile.TemporaryDirectory(prefix="ci-native-doctor-", dir=ROOT / "runs") if output is None else None
     directory = Path(context.name).resolve() if context else Path(output).resolve()
     try:
-        info = setup(config, directory / "probe", ROOT.parents[1] / "skills/ci-self-healing")
+        info = setup(config, directory / "probe", skill_source or ROOT.parents[1] / "skills/ci-self-healing")
         trial = directory / "probe"
         (trial / "visible/scene/sourcecode").mkdir(parents=True)
         write_json(trial / "adapter/layout.json", info)

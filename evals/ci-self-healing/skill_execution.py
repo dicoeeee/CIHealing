@@ -10,8 +10,9 @@ import re
 import shlex
 
 from common import EvalError, digest, json_bytes, read_json, read_regular
-from repair_support import (EXECUTION_CONTRACT, EXECUTION_CONTRACTS, RECOVERY_EXECUTION_CONTRACTS, SPLIT_EXECUTION_CONTRACTS,
+from repair_support import (EXECUTION_CONTRACT, MERGED_EXECUTION_CONTRACT, EXECUTION_CONTRACTS, RECOVERY_EXECUTION_CONTRACTS, SPLIT_EXECUTION_CONTRACTS,
                             POLICY_EXECUTION_CONTRACTS, INPUT_EXECUTION_CONTRACTS, SEPARATE_BASIS_EXECUTION_CONTRACTS,
+                            MODULAR_EXECUTION_CONTRACTS, CLEANUP_EXECUTION_CONTRACTS,
                             SKILL_NAME, execution_contract, source_state)
 
 
@@ -158,16 +159,24 @@ def direct_skill_access(name, args, skill):
     return False
 
 
-def audit_execution(trial, events, after, expected, backend="native", *, contract=EXECUTION_CONTRACT, trace_gaps=()):
+def audit_execution(trial, events, after, expected, backend="native", *, contract=EXECUTION_CONTRACT, trace_gaps=(),
+                    pipeline_report=None, build_detector=None, candidate_prefixes=None):
     if contract not in EXECUTION_CONTRACTS:
         raise EvalError("unsupported skill execution contract")
+    if pipeline_report is not None and type(pipeline_report) is not bool:
+        raise EvalError("pipeline report applicability must come from the trusted fixture")
+    detect_build = build_detector or is_build
+    candidate_prefixes = candidate_prefixes or ("scene/sourcecode/src/main/java/",)
     trial = Path(trial)
     skill = trial / ("runtime/skills/ci-self-healing" if backend == "native" else "runtime-skill")
     exposed_skill = str(skill) if backend == "native" else "/skills/ci-self-healing"
     exposed_root = str(trial / "visible/scene/sourcecode") if backend == "native" else "/trial/scene/sourcecode"
+    exposed_output = str(trial / "visible/output") if backend == "native" else "/trial/output"
     if contract in SPLIT_EXECUTION_CONTRACTS and execution_contract(skill) != contract:
         raise EvalError("Skill package does not declare the split resource layout")
-    candidate_resources = ("references/diagnosis-and-repair.md", "references/repair-and-verification.md")
+    admission_resource = ("references/repair-admission.md" if contract in MODULAR_EXECUTION_CONTRACTS
+                          else "references/repair-and-verification.md")
+    candidate_resources = ("references/diagnosis-and-repair.md", admission_resource)
     if contract in SEPARATE_BASIS_EXECUTION_CONTRACTS:
         candidate_resources += ("references/repair-basis.md",)
     if contract in POLICY_EXECUTION_CONTRACTS:
@@ -175,6 +184,7 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
     result = {"contract": contract, "failures": [], "gaps": [], "resource_reads": [],
               "builds": [], "workspace_checks": [], "non_native_workspace_observations": [], "script_invocations": [],
               "coverage": "native tool receipts and boundary states; unconfirmed native evidence does not prove no shell execution; opaque commands/intent require semantic review"}
+    historical_cleanup = contract in CLEANUP_EXECUTION_CONTRACTS
     calls, reads, captures = {}, {}, {}
     loaded = False
     active_capture, latest_check = None, None
@@ -208,13 +218,31 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
         seq, kind, p = event.get("seq", 0), event.get("kind"), event.get("payload", {})
         state = p.get("source_state_sha256")
         changed = p.get("changed_paths_since_previous_event", [])
-        if any(path.startswith("scene/sourcecode/src/main/java/") for path in changed):
+        if any(path.startswith(candidate_prefixes) for path in changed):
             require(candidate_resources, seq)
+        if contract in MODULAR_EXECUTION_CONTRACTS and any(path.startswith(("scene/sourcecode/", "output/")) for path in changed):
+            require(("references/output-delivery.md",), seq)
         if any(path.startswith("scene/sourcecode/") and not path.startswith("scene/sourcecode/target/") for path in changed):
             active_capture = None
         if kind == "InvocationToolCallStart":
             calls[p.get("call_id")] = event
             name, args = p.get("tool_name"), p.get("args", {})
+            if contract in MODULAR_EXECUTION_CONTRACTS:
+                # Bounded observed interfaces, not a shell/prose policy parser.
+                path = args.get("path", args.get("file_path", args.get("filename", "")))
+                output_access = isinstance(path, str) and (path == exposed_output or path.startswith(exposed_output + "/"))
+                if name in {"write_file", "edit_file"} or output_access or detect_build(p):
+                    require(("references/output-delivery.md",), seq)
+                formal_write = name in {"write_file", "edit_file"} and path == exposed_output + "/analysis-fix.md"
+                try:
+                    help_only = any(t in {"--help", "-h"} for t in script_tokens(args))
+                except ValueError:
+                    help_only = False
+                formal_check = (name == "run_skill_script" and args.get("skill_name") == SKILL_NAME
+                                and args.get("script_name") == "scripts/report_check.py"
+                                and not help_only)
+                if pipeline_report is True and (formal_write or formal_check):
+                    require(("references/pipeline-outcomes.md",), seq)
             if contract in INPUT_EXECUTION_CONTRACTS and uses_trial_workspace(
                     p, trial / "visible" if backend == "native" else "/trial"):
                 require(("references/invocation-inputs.md",), seq)
@@ -223,7 +251,9 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
             if direct_skill_access(name, args, exposed_skill):
                 fail("skill_native_tool_bypassed", seq)
             script = args.get("script_name") if name == "run_skill_script" else None
-            if contract in SPLIT_EXECUTION_CONTRACTS and script == "scripts/workspace_check.py":
+            if script == "scripts/workspace_check.py" and not historical_cleanup:
+                fail("retired_workspace_script_invoked", seq)
+            if historical_cleanup and contract in SPLIT_EXECUTION_CONTRACTS and script == "scripts/workspace_check.py":
                 try:
                     tokens = script_tokens(args)
                 except ValueError:
@@ -238,16 +268,17 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
             if script:
                 result["script_invocations"].append({"seq": seq, "script": script,
                     "channel": "native" if name == "run_skill_script" else "shell"})
-            if is_build(p):
+            if detect_build(p):
                 result["builds"].append(seq)
-                require(("references/workspace-cleanup.md",), seq)
+                if historical_cleanup:
+                    require(("references/workspace-cleanup.md",), seq)
                 if contract in POLICY_EXECUTION_CONTRACTS:
                     require(("references/enterprise-policy.md", "references/candidate-verification.md"), seq)
                 # A group can reuse its capture despite generated outputs, but
                 # must not reuse it after candidate changes (checked below).
-                if active_capture is None:
+                if historical_cleanup and active_capture is None:
                     fail("build_without_confirmed_native_capture", seq)
-                elif last_build < active_capture["seq"] and state != active_capture["state"]:
+                elif historical_cleanup and last_build < active_capture["seq"] and state != active_capture["state"]:
                     fail("capture_not_current_at_build", seq)
                 build_states.append({"seq": seq, "state": state,
                                      "binding": active_capture["binding"] if active_capture else None,
@@ -291,7 +322,7 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
                 if name == "load_skill":
                     loaded = True
             continue
-        if name != "run_skill_script" or args.get("script_name") != "scripts/workspace_check.py":
+        if not historical_cleanup or name != "run_skill_script" or args.get("script_name") != "scripts/workspace_check.py":
             continue
         try:
             tokens = script_tokens(args)
@@ -343,7 +374,7 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
         fail("native_skill_load_unconfirmed")
     if expected != "stop" and not result["builds"]:
         fail("agent_build_not_observed")
-    cleanup_required = expected != "stop" or bool(result["builds"])
+    cleanup_required = historical_cleanup and (expected != "stop" or bool(result["builds"]))
     if cleanup_required:
         if not latest_check or latest_check["result"] != "match" or latest_check["seq"] <= last_build:
             fail("final_native_cleanup_match_unconfirmed")
@@ -369,7 +400,7 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
         "cleanup_evidence": {"status": "not_required" if not cleanup_required else
             ("confirmed" if not cleanup_failures and not result["gaps"] and not trace_gaps else "unconfirmed"),
             "basis": "bound native capture, build ordering, final match and final state; v2/v3 recovery additionally requires full-state reconstruction proof"}}
-    if contract in POLICY_EXECUTION_CONTRACTS:
+    if historical_cleanup and contract in POLICY_EXECUTION_CONTRACTS:
         result["dimensions"]["cleanup_evidence"]["basis"] = (
             "bound native capture, build ordering, final match and final state; v4 recovery additionally requires full-state reconstruction proof")
         result["coverage"] += (
@@ -381,13 +412,22 @@ def audit_execution(trial, events, after, expected, backend="native", *, contrac
             "; v5 invocation-inputs full-read gate covers file/search tools, literal trial-root shell access, "
             "detected builds and non-help Skill scripts; input interpretation, core-contract applicability, "
             "stop sufficiency and unnecessary resource reads require semantic review; no reasoning-text inspection")
-    if contract == EXECUTION_CONTRACT:
+    if contract == MERGED_EXECUTION_CONTRACT:
         result["coverage"] += (
             "; v6 repair basis is included in the repair-and-verification full-read gate; "
             "historical v3/v4/v5 retain their separate repair-basis gate")
+    if contract in MODULAR_EXECUTION_CONTRACTS:
+        result["coverage"] += (
+            "; v7 admission uses repair-admission; observed writes/output reads/builds require output-delivery; "
+            "pipeline-outcomes is gated only for fixture-confirmed formal report writes/checks; "
+            "ordinary replies and independent enterprise artifacts do not imply a pipeline report; "
+            "success criteria and route applicability remain semantic, and unentered candidate branches need no reads")
     if contract in RECOVERY_EXECUTION_CONTRACTS:
         result["dimensions"]["process_compliance"] = {
             "status": "violations_observed" if result["violations"] else "no_observed_violation",
             "violations": result["violations"], "recoveries": result["recoveries"],
             "meaning": "recovery can unblock independent verification; it does not erase process history or establish repair correctness"}
+    if not historical_cleanup:
+        result["dimensions"]["cleanup_evidence"] = {"status": "not_required",
+            "basis": "v8 allows ordinary build artifacts; source protection, candidate coverage and delivery remain separately assessed"}
     return result

@@ -53,14 +53,14 @@ async def check_skills(profile_dir, agent):
         raise EvalError("native Skill tool returned incomplete or invalid content")
     # Exercise the native script runner, not an equivalent shell invocation.
     help_text = await tool_map["run_skill_script"].func(
-        skill_name=SKILL_NAME, script_name="scripts/workspace_check.py",
-        arguments=["capture", "--help"], cwd=SKILL_MOUNT, max_tokens=4000)
+        skill_name=SKILL_NAME, script_name="scripts/report_check.py",
+        arguments=["--help"], cwd=SKILL_MOUNT, max_tokens=4000)
     # Current native runner omits zero, but renders nonzero exit codes. Probe
     # both paths instead of requiring the shell tool's different output format.
     bad_args = await tool_map["run_skill_script"].func(
-        skill_name=SKILL_NAME, script_name="scripts/workspace_check.py",
-        arguments=["capture", "--ci-eval-invalid-option"], cwd=SKILL_MOUNT, max_tokens=4000)
-    if (not isinstance(help_text, str) or "--manifest" not in help_text
+        skill_name=SKILL_NAME, script_name="scripts/report_check.py",
+        arguments=["--ci-eval-invalid-option"], cwd=SKILL_MOUNT, max_tokens=4000)
+    if (not isinstance(help_text, str) or "--report" not in help_text
             or ("[exit_code:" in help_text and "[exit_code: 0]" not in help_text)
             or not isinstance(bad_args, str) or "[exit_code: 2]" not in bad_args):
         raise EvalError("native Skill script runner unavailable; no model called")

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from common import digest, read_json, read_regular, snapshot, write_json, write_new
 from grading import combined_status, grade_trial
-from repair_support import EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT
+from repair_support import MODULAR_EXECUTION_CONTRACT as EXECUTION_CONTRACT, LEGACY_EXECUTION_CONTRACT
 from review import make_packet
 from review_packet import project_packet
 from suite import REPO, prepare
@@ -63,7 +63,8 @@ class RecoveryGradingTests(unittest.TestCase):
                 mock.patch("grading.probe_build", return_value={"status": "passed"}) as build:
             result = grade_trial(root, row, {"backend": "native"})
         build.assert_called_once()
-        self.assertEqual(check.call_args.kwargs, {"contract": EXECUTION_CONTRACT, "trace_gaps": []})
+        self.assertEqual(check.call_args.kwargs, {"contract": EXECUTION_CONTRACT, "trace_gaps": [],
+                                                  "pipeline_report": True})
         self.assertEqual(result["status"], "awaiting_review")
         self.assertEqual(combined_status(result, None), "incomplete")
         self.assertEqual(result["report_check"]["status"], "passed")

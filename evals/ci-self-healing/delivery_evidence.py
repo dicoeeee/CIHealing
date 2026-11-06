@@ -15,6 +15,51 @@ from repair_support import DELIVERY_CONTRACT, DELIVERY_CONTRACTS, MANIFEST_DELIV
 from skill_execution import audit_execution, options, script_tokens
 
 
+def _edit_receipt_count(reply, path):
+    """Recognize legacy acknowledgements and native iCode edit previews.
+
+    Preview text is diagnostic context, not the edited artifact or a readback.
+    Replay still uses the call arguments and must match the final file bytes.
+    Unknown/error suffixes and a truncated native acknowledgement fail closed.
+    """
+    if not isinstance(reply, str):
+        return None
+    header, separator, preview = reply.strip().partition("\n")
+    match = re.fullmatch(r"Replaced ([1-9]\d*) (occurrence(?:s|\(s\))?) in "
+                         + re.escape(path) + r"\.", header)
+    if not match:
+        return None
+    try:
+        count = int(match[1])
+    except ValueError:
+        return None
+    if match[2] == "occurrence(s)":
+        return count if not separator else None
+    if match[2] != ("occurrence" if count == 1 else "occurrences"):
+        return None
+    if not separator or not preview.startswith("Before:\n"):
+        return None
+    before, marker, after = preview[len("Before:\n"):].partition("\nAfter:")
+    if not before or not marker or (after and not after.startswith("\n")):
+        return None
+    # Native previews can elide their middle. They need not contain the entire
+    # old/new strings, and replace_all previews describe only the first match.
+    for side in (before, after[1:] if after else ""):
+        for line in side.split("\n") if side else ():
+            if re.fullmatch(r"  [1-9]\d*\|.*", line):
+                continue
+            omitted = re.fullmatch(r"  \[\.\.\. ([1-9]\d*) lines omitted "
+                                   r"\(([1-9]\d*)-([1-9]\d*)\) \.\.\.\]", line)
+            if not omitted:
+                return None
+            try:
+                if int(omitted[3]) - int(omitted[2]) + 1 != int(omitted[1]):
+                    return None
+            except ValueError:
+                return None
+    return count
+
+
 def artifact_checkpoint(events, path, body, script, required_options=None):
     """Replay native writes/edits and bind checks/readback to final bytes.
 
@@ -36,6 +81,7 @@ def artifact_checkpoint(events, path, body, script, required_options=None):
         args, name = start["payload"].get("args", {}), start["payload"].get("tool_name")
         reply = p.get("result", "")
         if args.get("path") == path and name in {"write_file", "edit_file"}:
+            edit_count = _edit_receipt_count(reply, path) if name == "edit_file" else None
             if intervals and start["seq"] <= intervals[-1][1]:
                 gaps.append("overlapping_artifact_writes")
             intervals.append((start["seq"], seq))
@@ -43,12 +89,12 @@ def artifact_checkpoint(events, path, body, script, required_options=None):
                     reply.startswith(f"Written {len(args['content'])} chars (") and reply.endswith(f"to {path}.")):
                 content = args["content"]
                 writes.append(seq)
-            elif name == "edit_file" and isinstance(content, str) and isinstance(reply, str) and (
-                    re.fullmatch(r"Replaced [1-9]\d* occurrence\(s\) in " + re.escape(path) + r"\.", reply.strip())):
+            elif name == "edit_file" and isinstance(content, str) and edit_count is not None:
                 old, new = args.get("old_string"), args.get("new_string")
                 if (not isinstance(old, str) or not old or not isinstance(new, str) or old not in content
+                        or type(args.get("replace_all", False)) is not bool
                         or (not args.get("replace_all") and content.count(old) != 1)
-                        or int(reply.split()[1]) != (content.count(old) if args.get("replace_all") else 1)):
+                        or edit_count != (content.count(old) if args.get("replace_all") else 1)):
                     gaps.append("artifact_edit_not_replayable")
                 else:
                     content = content.replace(old, new, -1 if args.get("replace_all") else 1)
@@ -401,7 +447,7 @@ def _assess(trial, run, result):
     if set(changes(before, after)) != allowed_changes:
         gaps.append("not_report_only_change")
     audit = audit_execution(trial, events, after, "stop", run.get("backend", "native"),
-                            contract=run.get("skill_execution_contract"), trace_gaps=trace["gaps"])
+                            contract=run.get("skill_execution_contract"), trace_gaps=trace["gaps"], pipeline_report=True)
     if audit["failures"] or audit["gaps"]:
         gaps.append("native_execution_audit_not_clean")
     receipt = read_json(trial / "session-receipt.json")
