@@ -7,7 +7,7 @@ reviewed: false
 
 本文件描述某一类企业 CI 的输入布局与交付约定，不代表所有企业 CI。场景选择与前置读取由主入口安排；本场景提供路径含义、执行约束及现场材料的解释，不指定后续主流程步骤。
 
-本场景由流水线在构建失败后启动 Agent，提供失败现场，在 Job 工作空间内修复并验证。启动约定为 `mode: local_verify`，`collaboration.can_ask_user: false`、`collaboration.can_handoff_to_parent: false`；执行者角色仍按可信调用确定。实验、候选修改与验证适用执行模式中的工作空间规则及 CI Job 交付约定；运行时上下文以原 Job 结论是否固化为依据。
+本场景是无人值守的 CI Job。流水线在构建失败后启动 Agent，在 Job 工作空间内修复并验证。场景约定为 `mode: local_verify`、`collaboration.can_ask_user: false`、`collaboration.can_handoff_to_parent: false`，执行者角色仍由可信调用确定，主 Agent 和子 Agent 均按无人值守约定交付。实验、候选修改与验证遵循 CI Job 工作空间约定，运行时上下文以原 Job 结论是否固化为依据。
 
 ## 调用与路径
 
@@ -19,7 +19,7 @@ work_dir: /path/to/failure-scene
 output_dir: /path/to/healing-output
 ```
 
-上例保留命名文本传参。在支持主入口 `arguments` 扩展的宿主中，也可按顺序传入路径：
+例如，某个模块编译失败，修复后用能复验该错误并覆盖改动影响的最小命令验证。若它又报出另一个编译错误，继续处理并复验；所需检查通过且没有其他已发现的阻塞时即可交付，无需为寻找更多问题而跑完整个 Job。在支持主入口 `arguments` 扩展的宿主中，也可按顺序传入路径：
 
 ```text
 /ci-self-healing "/path/to/failure-scene" "/path/to/healing-output"
@@ -59,4 +59,4 @@ output_dir: /path/to/healing-output
 
 任何输出目标位于源码内时，报告、企业文件及不参与构建的本次证据文件均须标明供提取脚本排除，不列入变更条目；安全边界沿用报告指南。按其交付检查核对已声明产物，只报告实际观察到的 Patch 提取或归档结果。
 
-本场景的关键缺口按取证充分性判据说明影响、已有证据与继续所需条件。本场景的协作能力为不可用，不能将本地目录、终端或报告生成视为已具备协作通道。
+需要人工补证、审批或实施时，报告第 1 节写明需要人工处理的原因、建议接手角色及具体下一步，第 6 节引用现场证据并说明继续处理或验收所需的条件。材料随报告交付，人工接手情况按已有事实表述。报告及适用的企业文件按交付约定处理后，本次调用结束。

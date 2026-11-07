@@ -175,10 +175,10 @@ class ReportCheckTests(unittest.TestCase):
             ("local_verified", "本地必要验证和清理通过。", "present"),
             ("repair_advised", "方案已确定：修改 src/Example.java 的导入，依据 MR-1 的类型契约；策略禁止本轮写入。实施后运行编译和调用方测试，预期均通过，本次未执行。", "none"),
             ("unresolved", "明确禁修且未形成修改方案。", "none"),
-            ("unresolved", "缺少目标行为契约，尚未确定修改方向。", "none"),
+            ("unresolved", "案例库返回空结果，缺少目标行为契约，尚未确定修改方向。", "none"),
             ("unresolved", "候选验证失败，尚无有效新方案。", "present"),
             ("unresolved", "请契约负责人补充目标行为，确认后才能决定修改接口还是调用方。", "none"),
-            ("unresolved", "案例 H1 的目标行为和当前版本关系尚未确认，请人工核对适用性后决定调整方式。", "none"),
+            ("repair_advised", "案例库返回 H1 的摘要，正文读取失败。当前适用性待人工确认，本次未实施或验证。", "none"),
             ("repair_advised", "案例 H1 已按当前 MR 契约核对；将本仓 Feature.java 的三参数调用改为 route(payload)，保留接口。本轮禁修，由人工实施并复验编译及 base:<payload> 行为，尚未执行。", "none"),
             ("unresolved", "必要源码修改被可信策略明确禁止，且目标行为未知，未交付明确方案；请人工补充契约。", "none"),
         )

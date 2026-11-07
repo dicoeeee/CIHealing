@@ -9,6 +9,7 @@
 - 项目主页：[`10_Projects/CI 自愈研究与方案/CI 自愈研究与方案.md`](10_Projects/CI%20自愈研究与方案/CI%20自愈研究与方案.md)
 - CI 自愈 Skill：[`skills/ci-self-healing/SKILL.md`](skills/ci-self-healing/SKILL.md)
 - Skill 使用说明：[`skills/ci-self-healing/README.md`](skills/ci-self-healing/README.md)
+- 企业接入可从[配置分类与处置方式](skills/ci-self-healing/README.md#企业分类与处置方式)开始，按需查阅 [CI 平台、案例源、修复策略与输出规范的配置示例](skills/ci-self-healing/docs/enterprise-configuration.md)。
 - 主题地图：[`50_MOCs/CI 自愈 MOC.md`](50_MOCs/CI%20自愈%20MOC.md)
 - 研究工作台：[`50_MOCs/CI 自愈工作台.base`](50_MOCs/CI%20自愈工作台.base)
 - 专题工作流：[`80_Admin/CI 自愈专题工作流.md`](80_Admin/CI%20自愈专题工作流.md)
