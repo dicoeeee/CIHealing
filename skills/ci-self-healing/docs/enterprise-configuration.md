@@ -124,15 +124,15 @@ Classification Profile 是企业或个人分类标准的文档包，与 Provider
 
 ### 1. 准备目录与细则
 
-沿用企业已有编号、名称、层级及定义，不必映射为通用分类树。若企业采用“3 阶段 → 11 大类 → 39 小类”，就在自己的 Profile 完整保留它；这些数量不是通用 Skill 的限制。建议放在 Skill 的 references 下：
+沿用企业已有编号、名称、层级及定义，不必映射为通用分类树。若企业采用“3 阶段 → 11 大类 → 39 小类”，就在自己的 Profile 完整保留它；这些数量不是通用 Skill 的限制。以下示例将分类入口和细则放在同一个产品目录下。
 
 ~~~text
-references/classification-profiles/<company>/<product>/
+references/<product>/
 ├── profile.md     # 标识、版本、范围、完整目录与规则索引
 └── rules.md       # 各层定义、小类判据、排除与重叠边界
 ~~~
 
-这些路径是企业创建资源时的示意，本仓库尚未附带真实企业类别。已有受信任文档能提供相同内容时可直接引用，避免平行副本。细则较长且宿主无法按章节读取时，可按大类拆分为 `rules/<大类编号>.md`；不默认创建 39 个文件或 39 份修复指南。
+这些路径是企业创建资源时的示意，本仓库尚未附带真实企业类别。已有受信任文档能提供相同内容时可直接引用，避免平行副本。细则较长且宿主无法按章节读取时，可按大类拆成多个文件，例如产品目录下的 `rules-<大类编号>.md`。
 
 `profile.md` 可按以下骨架编写；示例行须替换为真实全量目录后再启用：
 
@@ -185,7 +185,7 @@ references/classification-profiles/<company>/<product>/
 
 | 资源类型 | 固定 ID | 接入入口 |
 | --- | --- | --- |
-| 分类 Profile | my-company/my-product | references/classification-profiles/my-company/my-product/profile.md |
+| 分类 Profile | my-company/my-product | references/my-product/profile.md |
 | 案例源 | 未配置 | 未配置 |
 ~~~
 
@@ -204,7 +204,7 @@ references/classification-profiles/<company>/<product>/
 work_dir: /path/to/failure-scene
 output_dir: /path/to/healing-output
 本次分类 Profile：<company>/<product>
-Profile 入口：references/classification-profiles/<company>/<product>/profile.md
+Profile 入口：references/<product>/profile.md
 ~~~
 
 启动器注入是可选方式，不是定制版本的必需步骤。本次选择提供资源类型、ID 和入口即可，沿用上述命名文本，无需改成表格；固定声明也只是 Markdown 约定，不新增 CLI 参数、配置文件解析器或机器协议。固定分类同样适用于仅诊断和其他修复调用，不依赖两个目录参数是否提供。

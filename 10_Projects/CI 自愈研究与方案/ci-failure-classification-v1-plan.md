@@ -70,11 +70,9 @@ ci-self-healing/
     ├── failure-classification.md
     ├── failure-evidence-extraction.md          # 已有或另项建设，按需引用
     ├── diagnosis-and-repair.md
-    └── classification-profiles/
-        └── <company>/
-            └── <product>/
-                ├── profile.md
-                └── rules.md
+    └── <product>/
+        ├── profile.md
+        └── rules.md
 ```
 
 `failure-classification.md` 只维护通用流程，不复制 39 类定义。`profile.md` 提供总览与资源入口，`rules.md` 提供分类细则。
@@ -107,12 +105,11 @@ Profile 总览至少包括：
 若规则较长，且当前宿主无法按章节或行范围读取，再按 11 个大类拆分：
 
 ```text
-<product>/
+references/<product>/
 ├── profile.md
-└── rules/
-    ├── <大类编号一>.md
-    ├── <大类编号二>.md
-    └── ...
+├── rules-<大类编号一>.md
+├── rules-<大类编号二>.md
+└── ...
 ```
 
 不默认创建 39 个文件。是否拆分由实际篇幅和读取能力决定，不由类别数量机械决定。
@@ -169,22 +166,21 @@ Profile 总览至少包括：
 
 V1 每个明确的失败调查对象使用一份选定的 Profile，不做自动发现和多 Profile 合并。
 
-通用发行包不固定标准；企业或个人取得后可以定制自己的版本，在 `SKILL.md` 唯一的“分类 Profile 绑定”区固定标识及入口。固定后每次调用自动按该绑定读取，无需启动器重复注入。例如，维护者将原先两项“未配置”替换为：
+通用发行包不固定标准。企业或个人定制时，在 `SKILL.md` 的“自定义资源绑定”表中填写分类 Profile 的标识和入口。固定后每次调用按该绑定读取。以下示例展示维护者需要替换的分类行。
 
 ```markdown
-## 分类 Profile 绑定
-
-- 固定 Profile：<实际标识>
-- Profile 入口：references/classification-profiles/<company>/<product>/profile.md
+| 资源类型 | 固定 ID | 接入入口 |
+| --- | --- | --- |
+| 分类 Profile | <实际标识> | references/<product>/profile.md |
 ```
 
-示例路径须实际创建，示例文本本身不生效。个人也可使用自己的命名，不要求企业/产品组织层级。固定绑定不是允许本次输入自动覆盖的默认值。
+示例路径须实际创建，示例文本本身不生效。Profile 标识可沿用企业或个人已有命名，入口路径按产品目录填写。固定绑定不是允许本次输入自动覆盖的默认值。
 
 仅当发行包没有固定绑定时，才由明确用户请求、可信宿主配置或被明确纳入信任范围的场景/仓库约定选择本次 Profile。例如：
 
 ```text
 本次分类 Profile：<company>/<product>
-Profile 入口：references/classification-profiles/<company>/<product>/profile.md
+Profile 入口：references/<product>/profile.md
 ```
 
 这是可选的任务上下文约定，不是要求新增 CLI 参数、配置解析器或强制配置文件。现有 `work_dir`、`output_dir` 保持不变；固定绑定适用于只读诊断和修复，不依赖目录参数是否提供。
@@ -450,4 +446,4 @@ README 应优先说明企业或个人如何定制发行包并在 Skill 中固定
 
 **最终效果：企业维护原有 3→11→39 标准，通用 Skill 维护一致的证据与诊断流程；Agent 看完整目录、按需查细则、根据证据分类，分类足够时进入诊断，出现新证据时再修正。**
 
-实现入口见[企业分类执行指南](../../skills/ci-self-healing/references/failure-classification.md)，企业文件模板、可信启用与验收方法见 [Skill README](../../skills/ci-self-healing/README.md#企业分类自定义)。当前仅落地通用机制；真实企业分类内容仍待提供，未声称 39 类已接入或准确性已验证。
+实现入口见[企业分类执行指南](../../skills/ci-self-healing/references/failure-classification.md)，企业文件模板、可信启用与验收方法见 [Skill README](../../skills/ci-self-healing/README.md#企业分类与处置方式)。当前仅落地通用机制；真实企业分类内容仍待提供，未声称 39 类已接入或准确性已验证。

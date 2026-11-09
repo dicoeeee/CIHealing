@@ -27,7 +27,7 @@ reviewed: false
 | 双参数流水线报告的三种结果、案例命中与明确方案 | [pipeline-outcomes.md](references/pipeline-outcomes.md) |
 | 企业文件及报告适用范围、生成/校验依赖 | [output-delivery.md](references/output-delivery.md) |
 
-通用核心共 26 份指南，不是企业发行包文件数上限。Provider 的既有 `references/providers/` 路径保留实际正文；可信选定平台说明、Profile 目录与细则、策略入口明确引用的规范，以及已绑定案例源/企业输出规范，均可保留原有分层资源和路径。单跳约束针对通用流程的相互加载，不禁止这些受控企业依赖，也不要求复制企业正文或新建配置解析器。既有企业 ID、入口路径、相对路径规则、双参数及可信命名输入保持兼容；维护教程只在配置任务读取。
+通用核心共 26 份指南，不是企业发行包文件数上限。Provider 的既有 `references/providers/` 路径保留实际正文。企业可分别维护平台说明、分类目录与细则、修复策略、案例源说明和输出规范，由对应入口按需引用。单跳约束针对通用流程的相互加载，不禁止这些受控企业依赖，也不要求复制企业正文或新建配置解析器。既有企业 ID、入口路径、相对路径规则、双参数及可信命名输入保持兼容；维护教程只在配置任务读取。
 
 ## 让 AI 完成配置
 
@@ -78,6 +78,8 @@ reviewed: false
 | **案例源** | 创建接入说明，包含来源 ID/实例、允许范围、查询与原文读取方式、版本/完整性表示；企业 Agent 可自行组织本源查询策略，运行时按适用条件遵循企业优先级，通用规则补足并共享原预算。更新唯一绑定区中的案例源行，多源各列一行。未固定时也可由可信调用指定。按[主流程处置枚举](SKILL.md#按小类选择处置方式)判断是否查库；分类直查和附案例交接都复用有限检索 | [接入与验收](docs/enterprise-configuration.md#企业案例库接入) · [查询策略执行](references/case-retrieval.md#查询构造) |
 | **企业输出规范** | 企业在一份 Markdown 中列出全部必交文件及完整栏目，配置时在 `SKILL.md` 固定绑定 ID 和入口；运行时不按参数切换。所有声明文件每次都交付，无数据按企业空模板，未知不冒充空数据；校验器可选 | [填写说明与 file_change.json 示例](docs/enterprise-output-specification.md) · [通用输出适配](references/output-delivery.md) |
 
+**企业参考文档的存放位置。** 随 Skill 分发的企业参考文档（含入口引用的细则）统一放在 `references/` 下，可直接放文件或建一层子目录。以 `references/` 为起点、文件名计一级，相对路径最多两级。分类入口和细则放在同一个产品目录 `references/<产品>/` 下，例如 `profile.md` 和 `build-rules.md`。使用配置模板时也遵循这一上限。企业 Wiki 等外部资料沿用原位置，运行时报告按输出约定存放。
+
 优先引用企业已采用、可访问且可追踪版本的文档，避免维护平行副本。配置文件只记录必要的非敏感约定和受控引用；凭据及访问隔离由宿主管理。
 
 #### 企业分类与处置方式
@@ -112,7 +114,7 @@ reviewed: false
 
 | 资源类型 | 固定 ID 示例 | 接入入口示例（相对 Skill 根目录） |
 | --- | --- | --- |
-| 分类 Profile | `my-company/my-product` | `references/classification-profiles/my-company/my-product/profile.md` |
+| 分类 Profile | `my-company/my-product` | `references/my-product/profile.md` |
 | 案例源 | `company/ci-cases` | `references/case-sources/company-ci.md` |
 
 选用直查或附案例交接时，案例源接入说明写明企业 Wiki/RAG 的实例、授权范围、实际 MCP 工具或 CLI、搜索及按案例 ID 读原文的方式。可约定本源的关键词、查询顺序和结果不足时的调整条件。[案例源填写示例](docs/enterprise-configuration.md#企业案例库接入)
