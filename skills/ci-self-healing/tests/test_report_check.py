@@ -30,11 +30,12 @@ BASE = """# CI 自愈诊断与修复报告
 | 处理结果 | local_verified |
 | 绑定 Profile | 未绑定：Skill 未固定，本次调用未指定 |
 | work_dir | /scene |
+| 构建工作空间 | /scene；来源：宿主分配给 example-1 的独占任务目录 |
 | output_dir | /output |
 
 **仓库与候选**
 
-| 仓库 | 工作空间绝对路径 | baseline_sha | 候选 fingerprint |
+| 仓库 | 源码绝对路径 | baseline_sha | 候选 fingerprint |
 | --- | --- | --- | --- |
 | example | /scene/source | abc123 | digest-example |
 
@@ -353,6 +354,23 @@ class ReportCheckTests(unittest.TestCase):
         self.assertEqual(self.errors(text), [])
         self.assertIn("metadata_fields", self.codes(text.replace("| invocation_id | example-1 |\n", "")))
         self.assertIn("metadata_duplicate", self.codes(text.replace("| invocation_id | example-1 |", "| invocation_id | example-1 |\n| invocation_id | example-2 |")))
+
+    def test_build_workspace_is_required_in_metadata_even_when_body_records_it(self):
+        row = "| 构建工作空间 | /scene；来源：宿主分配给 example-1 的独占任务目录 |\n"
+        text = BASE.replace(row, "").replace("## 3. 目标行为与修复依据\n",
+                                            "## 3. 目标行为与修复依据\n\n构建工作空间：/scene，来源为宿主任务分配。\n")
+        self.assertIn("metadata_fields", self.codes(text))
+
+    def test_unconfirmed_build_workspace_does_not_block_unresolved_report(self):
+        for value in ("未知：实际执行 VM 的 WORKSPACE 未设置，尚未确认构建工作空间",
+                      "未确认：WORKSPACE 与宿主任务目录冲突，相关写入未执行"):
+            with self.subTest(value=value):
+                text = no_changes(no_checks(BASE)).replace("local_verified", "unresolved")
+                text = text.replace("/scene；来源：宿主分配给 example-1 的独占任务目录", value)
+                text = text.replace("本地编译和适用检查通过；未执行外层流水线。",
+                                    "工作空间来源存在缺口，未执行修改或验证；请宿主补齐可信任务目录。")
+                text = text.replace("实际编辑前宿主记录 admission-1。", "未执行：构建工作空间未确认。")
+                self.assertEqual(self.errors(text, checks="none"), [])
 
     def test_bound_profile_is_required_in_metadata_even_when_body_records_it(self):
         text = classified()

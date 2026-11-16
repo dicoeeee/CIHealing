@@ -10,11 +10,12 @@
 | 处理结果 | {{REPORT:local_verified或repair_advised或unresolved中的唯一枚举}} |
 | 绑定 Profile | {{REPORT:实际分类Profile标识版本及绑定来源或未绑定未应用标准及原因}} |
 | work_dir | {{REPORT:实际现场绝对路径或无效输入说明}} |
+| 构建工作空间 | {{REPORT:已确认的实际绝对路径及来源或未确认原因}} |
 | output_dir | {{REPORT:实际输出绝对路径或无效输入说明}} |
 
 **仓库与候选**
 
-| 仓库 | 工作空间绝对路径 | baseline_sha | 候选 fingerprint |
+| 仓库 | 源码绝对路径 | baseline_sha | 候选 fingerprint |
 | --- | --- | --- | --- |
 | {{REPORT:仓库标识}} | {{REPORT:源码路径}} | {{REPORT:基线或未知及原因}} | {{REPORT:候选指纹或不适用及原因}} |
 
