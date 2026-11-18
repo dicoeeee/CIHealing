@@ -4,6 +4,7 @@ import hashlib
 import fcntl
 import json
 import os
+import re
 from pathlib import Path
 import selectors
 import signal
@@ -167,6 +168,56 @@ def read_checked_stream(stream, name, limit=16 * 1024 * 1024):
 
 def read_json(path):
     return json.loads(read_regular(path))
+
+
+def enterprise_output_binding(entry):
+    """Return the single active output binding (ID, entry), or None if ambiguous."""
+    # Only active block headings/rows count. Ambiguous inline HTML requires review.
+    visible, fence, comment = [], None, False
+    for line in entry.splitlines():
+        if fence:
+            if re.fullmatch(r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", line):
+                fence = None
+            continue
+        if comment or re.match(r"^ {0,3}<!--", line):
+            body = line if comment else line.split("<!--", 1)[1]
+            if "<!--" in body:
+                return None
+            _, closed, tail = body.partition("-->")
+            if tail.strip():
+                return None
+            comment = not closed
+            continue
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if opening:
+            fence = opening[1]
+        else:
+            if "<!--" in line or "-->" in line:
+                return None
+            visible.append(line)
+    if fence or comment:
+        return None
+    headings = [i for i, line in enumerate(visible)
+                if re.fullmatch(r" {0,3}### 自定义资源绑定[ \t]*", line)]
+    if len(headings) != 1:
+        return None
+    rows = []
+    for line in visible[headings[0] + 1:]:
+        if re.match(r"^ {0,3}#{1,3}[ \t]+", line):
+            break
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped[1:].split("|")]
+        if cells[0] != "企业输出规范":
+            continue
+        # Unsupported indentation or a partial row is ambiguity, not an absent row.
+        if not re.fullmatch(r" {0,3}\|.*\|[ \t]*", line):
+            return None
+        rows.append(cells[:-1])
+    if len(rows) == 1 and len(rows[0]) == 3 and all(rows[0]):
+        return tuple(rows[0][1:])
+    return None
 
 
 def markdown_allowed(data, name):

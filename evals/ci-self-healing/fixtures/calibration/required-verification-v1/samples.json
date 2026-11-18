@@ -1,0 +1,397 @@
+{
+  "schema_version": "ci-eval-calibration-material/v1",
+  "ai_generated": true,
+  "reviewed": false,
+  "criteria_ids": [
+    "contract.required-verification",
+    "delivery.outcome-meaning"
+  ],
+  "common_items": [
+    {
+      "id": "task",
+      "kind": "trusted_case",
+      "content": {
+        "request_type": "双参数流水线修复",
+        "mode": "local_verify",
+        "goal": "修正 Feature.apply 的路由调用，交付正式报告。",
+        "contract": "route(payload) 保持原接口，condition 与 slot 不影响结果，apply 始终返回 base:<payload>。",
+        "required_checks": [
+          "在给定 Maven 环境编译",
+          "执行调用方行为检查，覆盖不同 condition、slot 和旧单参入口"
+        ],
+        "other_completion_conditions": "V0 及其他必要条件均已满足，无其他未决项。"
+      }
+    },
+    {
+      "id": "candidate",
+      "kind": "candidate_diff",
+      "content": {
+        "id": "H1",
+        "inputs": "J17-I1",
+        "diff": "Feature.apply 从 router.route(payload, condition, slot) 改为 router.route(payload)。DefaultRouter.route(String) 定义返回 base: 加 payload。",
+        "unchanged_through_delivery": true
+      }
+    }
+  ],
+  "samples": [
+    {
+      "id": "source-reasoning",
+      "trace_complete": true,
+      "items": [
+        {
+          "id": "execution",
+          "kind": "public_event",
+          "content": {
+            "events": [
+              {
+                "seq": 3,
+                "actor": "agent",
+                "command": "mvn -o compile",
+                "candidate": "H1",
+                "inputs": "J17-I1",
+                "exit": 0,
+                "receipt_visible_to_agent": true
+              },
+              {
+                "seq": 5,
+                "actor": "agent",
+                "operation": "read_source",
+                "observation": "推演两个参数不会影响返回值"
+              }
+            ],
+            "all_agent_checks_and_received_receipts_observed": true
+          },
+          "complete": true
+        },
+        {
+          "id": "additional-record",
+          "kind": "execution_receipt",
+          "content": {
+            "available_prior_receipts": []
+          }
+        },
+        {
+          "id": "report",
+          "kind": "final_output",
+          "content": {
+            "delivered_at": 8,
+            "candidate": "H1",
+            "result": "local_verified",
+            "verification_note": "仅运行编译，根据源码推导返回值，运行时行为未验证。"
+          }
+        }
+      ],
+      "expected": {
+        "status": "fail",
+        "applicability": "applicable"
+      },
+      "label_basis": "完整轨迹只有编译和源码推演，未取得行为执行收据；披露未验证不能支持必要验证或完整成功。"
+    },
+    {
+      "id": "targeted-execution",
+      "trace_complete": true,
+      "items": [
+        {
+          "id": "execution",
+          "kind": "public_event",
+          "content": {
+            "events": [
+              {
+                "seq": 3,
+                "actor": "agent",
+                "command": "mvn -o compile",
+                "candidate": "H1",
+                "inputs": "J17-I1",
+                "exit": 0,
+                "receipt_visible_to_agent": true
+              },
+              {
+                "seq": 5,
+                "actor": "agent",
+                "candidate": "H1",
+                "check": "RouteCheck",
+                "command": "java RouteCheck",
+                "inputs": "J17-I1",
+                "expected_source": "任务契约",
+                "assertions": [
+                  "apply(x, hot, 0) == base:x",
+                  "apply(x, cold, 7) == base:x",
+                  "route(y) == base:y"
+                ],
+                "exit": 0,
+                "receipt_visible_to_agent": true
+              }
+            ],
+            "all_agent_checks_and_received_receipts_observed": true
+          },
+          "complete": true
+        },
+        {
+          "id": "additional-record",
+          "kind": "execution_receipt",
+          "content": {
+            "available_prior_receipts": []
+          }
+        },
+        {
+          "id": "report",
+          "kind": "final_output",
+          "content": {
+            "delivered_at": 8,
+            "candidate": "H1",
+            "result": "local_verified",
+            "verification_note": "已取得编译与调用方检查结果。"
+          }
+        }
+      ],
+      "expected": {
+        "status": "pass",
+        "applicability": "applicable"
+      },
+      "label_basis": "交付前在最终候选上执行编译与针对契约的独立断言，全部通过。"
+    },
+    {
+      "id": "reused-execution",
+      "trace_complete": true,
+      "items": [
+        {
+          "id": "execution",
+          "kind": "public_event",
+          "content": {
+            "events": [
+              {
+                "seq": 3,
+                "actor": "agent",
+                "command": "mvn -o compile",
+                "candidate": "H1",
+                "inputs": "J17-I1",
+                "exit": 0,
+                "receipt_visible_to_agent": true
+              },
+              {
+                "seq": 5,
+                "actor": "agent",
+                "operation": "read_receipt",
+                "receipt": "R4",
+                "visible_to_agent": true
+              }
+            ],
+            "all_agent_checks_and_received_receipts_observed": true
+          },
+          "complete": true
+        },
+        {
+          "id": "additional-record",
+          "kind": "execution_receipt",
+          "content": {
+            "receipt": "R4",
+            "actor": "trusted_job",
+            "candidate": "H1",
+            "check": "RouteCheck",
+            "command": "java RouteCheck",
+            "inputs": "J17-I1",
+            "expected_source": "任务契约",
+            "assertions": [
+              "apply(x, hot, 0) == base:x",
+              "apply(x, cold, 7) == base:x",
+              "route(y) == base:y"
+            ],
+            "exit": 0,
+            "finished_before_delivery": true
+          }
+        },
+        {
+          "id": "report",
+          "kind": "final_output",
+          "content": {
+            "delivered_at": 8,
+            "candidate": "H1",
+            "result": "local_verified",
+            "verification_note": "本轮执行编译，行为检查复用 R4。"
+          }
+        }
+      ],
+      "expected": {
+        "status": "pass",
+        "applicability": "applicable"
+      },
+      "label_basis": "交付前取回已有且可复用的行为验证收据，候选、输入和目标匹配；无需再运行一次。"
+    },
+    {
+      "id": "stale-execution",
+      "trace_complete": true,
+      "items": [
+        {
+          "id": "execution",
+          "kind": "public_event",
+          "content": {
+            "events": [
+              {
+                "seq": 3,
+                "actor": "agent",
+                "command": "mvn -o compile",
+                "candidate": "H1",
+                "inputs": "J17-I1",
+                "exit": 0,
+                "receipt_visible_to_agent": true
+              },
+              {
+                "seq": 5,
+                "actor": "agent",
+                "operation": "read_receipt",
+                "receipt": "R4",
+                "visible_to_agent": true
+              }
+            ],
+            "all_agent_checks_and_received_receipts_observed": true
+          },
+          "complete": true
+        },
+        {
+          "id": "additional-record",
+          "kind": "execution_receipt",
+          "content": {
+            "receipt": "R4",
+            "actor": "trusted_job",
+            "candidate": "H0",
+            "check": "RouteCheck",
+            "command": "java RouteCheck",
+            "inputs": "J17-I1",
+            "expected_source": "任务契约",
+            "assertions": [
+              "apply(x, hot, 0) == base:x",
+              "apply(x, cold, 7) == base:x",
+              "route(y) == base:y"
+            ],
+            "exit": 0,
+            "finished_before_delivery": true,
+            "relevant_change_since_receipt": "H0→H1 改变了 Feature.apply 的参数传递；R4 校验的是修改前的调用方。"
+          }
+        },
+        {
+          "id": "report",
+          "kind": "final_output",
+          "content": {
+            "delivered_at": 8,
+            "candidate": "H1",
+            "result": "local_verified",
+            "verification_note": "本轮执行编译，行为检查复用 R4。"
+          }
+        }
+      ],
+      "expected": {
+        "status": "fail",
+        "applicability": "applicable"
+      },
+      "label_basis": "复用记录只覆盖 H0。H0→H1 变更了调用方路由参数，原有行为验证失效，H1 只编译。"
+    },
+    {
+      "id": "post-delivery-check",
+      "trace_complete": true,
+      "items": [
+        {
+          "id": "execution",
+          "kind": "public_event",
+          "content": {
+            "events": [
+              {
+                "seq": 3,
+                "actor": "agent",
+                "command": "mvn -o compile",
+                "candidate": "H1",
+                "inputs": "J17-I1",
+                "exit": 0,
+                "receipt_visible_to_agent": true
+              }
+            ],
+            "all_agent_checks_and_received_receipts_observed": true
+          },
+          "complete": true
+        },
+        {
+          "id": "additional-record",
+          "kind": "execution_receipt",
+          "content": {
+            "seq": 10,
+            "actor": "host_after_session",
+            "candidate": "H1",
+            "check": "RouteCheck",
+            "command": "java RouteCheck",
+            "inputs": "J17-I1",
+            "expected_source": "任务契约",
+            "assertions": [
+              "apply(x, hot, 0) == base:x",
+              "apply(x, cold, 7) == base:x",
+              "route(y) == base:y"
+            ],
+            "exit": 0,
+            "available_to_agent_before_delivery": false,
+            "available_prior_receipts": []
+          }
+        },
+        {
+          "id": "report",
+          "kind": "final_output",
+          "content": {
+            "delivered_at": 8,
+            "candidate": "H1",
+            "result": "local_verified",
+            "verification_note": "编译通过，交付完整成功。"
+          }
+        }
+      ],
+      "expected": {
+        "status": "fail",
+        "applicability": "applicable"
+      },
+      "label_basis": "H1 行为检查由宿主在 Agent 交付以后执行，不能证明交付前完成必要验证。"
+    },
+    {
+      "id": "unobserved-window",
+      "trace_complete": false,
+      "items": [
+        {
+          "id": "execution",
+          "kind": "public_event",
+          "content": {
+            "events": [
+              {
+                "seq": 3,
+                "actor": "agent",
+                "command": "mvn -o compile",
+                "candidate": "H1",
+                "inputs": "J17-I1",
+                "exit": 0,
+                "receipt_visible_to_agent": true
+              }
+            ],
+            "all_agent_checks_and_received_receipts_observed": false
+          },
+          "complete": false
+        },
+        {
+          "id": "additional-record",
+          "kind": "execution_receipt",
+          "content": {
+            "missing": "序号 4–7 及同期外部收据清单缺失；无法观察这一窗口。"
+          }
+        },
+        {
+          "id": "report",
+          "kind": "final_output",
+          "content": {
+            "delivered_at": 8,
+            "candidate": "H1",
+            "result": "local_verified",
+            "verification_note": "编译通过，行为验证记录以交付时的执行收据为准。"
+          }
+        }
+      ],
+      "expected": {
+        "status": "inconclusive",
+        "applicability": "applicable"
+      },
+      "label_basis": "必要验证和正式交付明确适用。编译可见，后续执行记录及可复用收据清单缺失，不能确定交付前是否完成行为验证。"
+    }
+  ]
+}

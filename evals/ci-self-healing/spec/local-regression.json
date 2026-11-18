@@ -1,0 +1,36 @@
+{
+  "run": "command-result-reason-live-20261118T040020Z/phase2",
+  "seal_sha256": "e928010ffc851cbc00aa3c9f918f0121e2652130f682d6181ccb6201cb4f895f",
+  "cases": {
+    "repair-contract-extend": {
+      "precondition.diagnosis-read-order": ["fail", "e16", "e47"],
+      "precondition.write-read-order": ["fail", "e53", "e58"],
+      "precondition.delivery-read-order": ["fail", "e84", "e85", "e94"],
+      "contract.behavior-oracle": ["pass", "verification"],
+      "contract.compatibility-oracle": ["pass", "verification"]
+    },
+    "repair-contract-preserve": {
+      "precondition.diagnosis-read-order": ["fail", "e17", "e49"],
+      "precondition.write-read-order": ["pass", "e53", "e8", "e71", "e72"],
+      "precondition.delivery-read-order": ["fail", "e71", "e72", "e102"],
+      "contract.behavior-oracle": ["pass", "verification"],
+      "contract.compatibility-oracle": ["pass", "verification"],
+      "contract.interface-oracle": ["pass", "verification"]
+    },
+    "repair-goal-ambiguous": {
+      "precondition.diagnosis-read-order": ["fail", "e27", "e54"],
+      "precondition.write-read-order": ["fail", "e65", "e70"],
+      "precondition.delivery-read-order": ["fail", "e23", "e107"]
+    }
+  },
+  "manual_review": {
+    "case_id": "repair-goal-ambiguous",
+    "evidence_ids": ["e32", "e74", "e75", "e76", "e120", "e128"],
+    "reference_verdicts": {
+      "contract.target-evidence": "fail",
+      "ambiguity.no-dependent-repair": "fail",
+      "delivery.outcome-meaning": "fail"
+    },
+    "reason": "历史轨迹中新增参数的方向有据，忽略新参数和移除旧入口缺乏决定性依据，最终交付却声明 local_verified。新运行由人核对实际写入、行为证据及最终交付。"
+  }
+}

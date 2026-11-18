@@ -1,0 +1,5 @@
+final class ProbeInputs {
+    static final String[] PAYLOADS = { @PAYLOADS@ };
+    static final String[] CONDITIONS = { @CONDITIONS@ };
+    static final int[] SLOTS = { @SLOTS@ };
+}

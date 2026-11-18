@@ -6,6 +6,7 @@ This constrains transport, not malicious content inside a model prompt.
 """
 
 import hmac
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -19,12 +20,41 @@ from urllib.parse import urlsplit
 import httpx
 
 
+def json_digest(value):
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def review_format_audit(expected, actual):
+    """Only allow the exact host-selected Responses format; diagnostics contain no text."""
+    def flags(value):
+        value = value if isinstance(value, dict) else {}
+        schema = value.get("schema")
+        schema = schema if isinstance(schema, dict) else {}
+        try:
+            item = schema["properties"]["checks"]["items"]
+        except (KeyError, TypeError):
+            item = {}
+        return {"type_json_schema": value.get("type") == "json_schema",
+                "strict": value.get("strict") is True,
+                "root_closed": schema.get("additionalProperties") is False,
+                "item_closed": isinstance(item, dict) and item.get("additionalProperties") is False}
+    expected_flags, actual_flags = flags(expected), flags(actual)
+    actual_schema = actual.get("schema") if isinstance(actual, dict) else None
+    expected_hash, actual_hash = json_digest(expected), json_digest(actual)
+    return {"matched": all(expected_flags.values()) and all(actual_flags.values()) and expected_hash == actual_hash,
+            "expected_format_sha256": expected_hash, "actual_format_sha256": actual_hash,
+            "expected_schema_sha256": json_digest(expected["schema"]),
+            "actual_schema_sha256": json_digest(actual_schema), "actual_flags": actual_flags}
+
+
 class ResponseBudgetAudit:
     """Bounded terminal-metadata observation; never log text or rewrite bytes."""
     LIMIT = 1024 * 1024
 
-    def __init__(self, streaming):
+    def __init__(self, streaming, *, review=False):
         self.streaming, self.buffer, self.rows, self.invalid = streaming, b"", [], False
+        self.review = review
 
     def feed(self, chunk):
         if self.invalid:
@@ -80,7 +110,16 @@ class ResponseBudgetAudit:
             tokens = (usage or {}).get("output_tokens")
             if tokens is not None and (type(tokens) is not int or tokens < 0):
                 raise ValueError()
-            self.rows.append({"status": status, "reason": reason, "output_tokens": tokens})
+            row = {"status": status, "reason": reason, "output_tokens": tokens}
+            if self.review:
+                # Bind one unambiguous public answer, never reasoning or arbitrary
+                # metadata. Multiple messages/segments remain unconfirmed.
+                output = response.get("output")
+                messages = [x for x in output if isinstance(x, dict) and x.get("type") == "message"] if isinstance(output, list) else []
+                content = messages[0].get("content") if len(messages) == 1 else None
+                text = content[0].get("text") if isinstance(content, list) and len(content) == 1 and isinstance(content[0], dict) and content[0].get("type") == "output_text" else None
+                row["output_text_sha256"] = hashlib.sha256(text.encode()).hexdigest() if isinstance(text, str) else None
+            self.rows.append(row)
             if len(self.rows) > 1:
                 self.invalid = True
         except (ValueError, TypeError, RecursionError):
@@ -159,6 +198,9 @@ def make_server(config, *, host="0.0.0.0", port=8080, event_sink=None):
     cap = config.get("max_output_tokens")
     if cap is not None and (type(cap) is not int or cap <= 0):
         raise ValueError("invalid selected profile output limit")
+    review_format = config.get("review_wire_format")
+    if review_format is not None and not review_format_audit(review_format, review_format)["matched"]:
+        raise ValueError("review wire format must be strict and closed")
     generation_halted = False
     semaphore = threading.BoundedSemaphore(2)
     client = httpx.Client(timeout=httpx.Timeout(180, connect=15), follow_redirects=False, trust_env=False)
@@ -227,9 +269,23 @@ def make_server(config, *, host="0.0.0.0", port=8080, event_sink=None):
                 size = int(self.headers.get("Content-Length", "0"))
                 if not 0 < size <= 8 * 1024 * 1024 or self.headers.get("Transfer-Encoding"):
                     return self.reply(413)
-                body = json.loads(self.rfile.read(size))
+                def unique(pairs):
+                    result = {}
+                    for key, value in pairs:
+                        if key in result:
+                            raise ValueError("duplicate request key")
+                        result[key] = value
+                    return result
+                body = json.loads(self.rfile.read(size), object_pairs_hook=unique)
                 if not allowed_request(body, config["model_id"]):
                     return self.reply(403)
+                if review_format is not None:
+                    text_options = body.get("text")
+                    actual = text_options.get("format") if isinstance(text_options, dict) else None
+                    audit = review_format_audit(review_format, actual)
+                    self.event("review_format_request", **audit)
+                    if not audit["matched"]:
+                        return self.reply(403)
                 if cap is not None:
                     # Reject, never silently repair a missing or changed wire cap.
                     if type(body.get("max_output_tokens")) is not int or body["max_output_tokens"] != cap:
@@ -267,14 +323,15 @@ def make_server(config, *, host="0.0.0.0", port=8080, event_sink=None):
                             phase = "upstream_close"
                             return
                         phase = "upstream_read"
-                        audit = ResponseBudgetAudit("text/event-stream" in response.headers.get("Content-Type", "")) if cap is not None else None
+                        audit = ResponseBudgetAudit("text/event-stream" in response.headers.get("Content-Type", ""),
+                                                    review=review_format is not None) if cap is not None or review_format is not None else None
                         try:
                             for chunk in response.iter_bytes():
                                 if audit:
                                     audit.feed(chunk)
                                     if audit.invalid or (audit.rows and (
                                             audit.rows[-1]["status"] != "completed" or audit.rows[-1]["reason"] != "none"
-                                            or (audit.rows[-1]["output_tokens"] is not None and audit.rows[-1]["output_tokens"] > cap))):
+                                            or (cap is not None and audit.rows[-1]["output_tokens"] is not None and audit.rows[-1]["output_tokens"] > cap))):
                                         generation_halted = True
                                 def write():
                                     self.wfile.write(chunk)
@@ -287,7 +344,7 @@ def make_server(config, *, host="0.0.0.0", port=8080, event_sink=None):
                                 observed = audit.finish()
                                 self.event("generation_response", **observed)
                                 if (observed["status"] != "completed" or observed["reason"] != "none"
-                                        or (observed["output_tokens"] is not None and observed["output_tokens"] > cap)):
+                                        or (cap is not None and observed["output_tokens"] is not None and observed["output_tokens"] > cap)):
                                     generation_halted = True
                         phase = "upstream_close"
                 except (httpx.HTTPError, OSError) as exc:

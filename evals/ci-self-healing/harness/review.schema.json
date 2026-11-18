@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "criterion_id": {"type": "string", "minLength": 1},
+          "applicability": {"type": "string", "enum": ["applicable", "not_applicable", "unknown"]},
+          "status": {"type": "string", "enum": ["pass", "fail", "inconclusive", "not_applicable"]},
+          "evidence_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "reason": {"type": "string", "minLength": 1}
+        },
+        "required": ["criterion_id", "applicability", "status", "evidence_ids", "reason"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["checks"],
+  "additionalProperties": false
+}

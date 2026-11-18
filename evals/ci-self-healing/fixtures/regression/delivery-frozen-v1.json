@@ -1,0 +1,91 @@
+{
+  "10-standard-priority": {
+    "expected": {
+      "delivery.enterprise-files": "fail",
+      "delivery.readback": "fail",
+      "delivery.report-contract": "pass"
+    },
+    "inputs": {
+      "fixture.json": "6572dad6f882372950089e8bb4bad8122b27ad048a39bf4cfb60db3b666c0743",
+      "host/design.json": "f48138056e80ba0a8d7e8a34065804a081cf0004610427b692235d18a0fdb9da",
+      "host/events.jsonl": "c9ddf04698e5b078166515b4c0ca5d60270608fe293be803427020376565194b",
+      "host/execution.json": "44f93389cdc96f11d56584502e2a3703aec9ae9f19a02082f8838f018042704e",
+      "host/retrieval-audit.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "host/visible-after.json": "3e107c8bf68af0fb1125b69661a5df6f9b9b019cb55fb1c39bceb7fbf1d479ba",
+      "host/visible-before.json": "d534cacb9570e295b5a200837e60f20205d2e5da277e86456153c95d2ee961b1",
+      "visible/output/analysis-fix.md": "f4bb470084c3bb8959f117ed613a7979dc022f9302b525539ffb47f74298a269",
+      "visible/task.txt": "21fcc25171760d8866ca10b543a8017789eae5c80a6ddfee9b95f037f68c30f5"
+    }
+  },
+  "11-independent-after-lookup": {
+    "expected": {
+      "delivery.enterprise-files": "pass",
+      "delivery.readback": "pass",
+      "delivery.report-contract": "pass"
+    },
+    "expected_triage": {
+      "agent_json_parse": "pass",
+      "final_content": "pass",
+      "final_readback": "pass",
+      "present": "pass",
+      "agent_field_check": "pass"
+    },
+    "inputs": {
+      "fixture.json": "6572dad6f882372950089e8bb4bad8122b27ad048a39bf4cfb60db3b666c0743",
+      "host/design.json": "648d602287c5e7b5d2c44aa97591376433f397e657f59cde21dace54b4a77344",
+      "host/events.jsonl": "ff21c5a9a6317132923bfb08042a060d6f8f30a8f44c6778cbb6031a0587be14",
+      "host/execution.json": "ba48db0f3cb39b522c681d67cdd51917b89dd69c94bd1242cb37fec07f2851d5",
+      "host/retrieval-audit.jsonl": "3a6bcf463803bd65b3257d5ac8e225bb1455b0feeb1569986498bab8b157b4a5",
+      "host/visible-after.json": "42c28d834fbbd3779f146c032f3a3204bc0b588b4c54dd4ed6d481bf686c89f6",
+      "host/visible-before.json": "4f456f723d2ef5a4b4513ca5b038aaceecbe497b962a60135bc291131fe20a72",
+      "visible/output/analysis-fix.md": "04b060f4458fbad906f9738952b18571e21b956eb9dec28194d11714d73c0726",
+      "visible/output/triage.json": "a1f2b841f326f1fdf38d9060a0783682c15ef123148889a63efb6d9a3373d2bc",
+      "visible/task.txt": "e97b7139a7949284294a4bc5d5f904131e0b669c5133c35c9eb31d190f863ade"
+    }
+  },
+  "12-solution-without-hit": {
+    "expected": {
+      "delivery.enterprise-files": "inconclusive",
+      "delivery.readback": "inconclusive",
+      "delivery.report-contract": "pass",
+      "handoff.channel-submission": "fail"
+    },
+    "expected_triage": {
+      "agent_json_parse": "inconclusive",
+      "final_content": "pass",
+      "final_readback": "pass",
+      "present": "pass",
+      "agent_field_check": "inconclusive"
+    },
+    "inputs": {
+      "fixture.json": "f41a79de6c0c5e1ae781778bc8c10d3d4033be2df1bb3884d99ab1a4767fc905",
+      "host/design.json": "08934674b7a8632f65142f7f801604028eedd00c729579d31adb58a0bff66b59",
+      "host/events.jsonl": "e3638322d59a08f0ae1cdf9447b0d74589b627721f608d203b622d969f4ba14b",
+      "host/execution.json": "8ab34d5856413448c6d46233000e71fcaf64c81dc2ca72699f0580b9452917a0",
+      "host/retrieval-audit.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "host/visible-after.json": "7ccc147205ef50fbedb8e726d584bcb2fb36f92a4d4d77a5aae6c49876c2c4ce",
+      "host/visible-before.json": "272c1b4f4dc691660097d997d1d921de0b2d110c264c8738bdad2f200173385f",
+      "visible/output/analysis-fix.md": "da509cacb073c8e6ffb3ee715e92d7ac241f86c0c7479fbc7df3bcf233efcf86",
+      "visible/output/triage.json": "a3eef18f7c8cbff7aecca02517e64297fb780c6094da86e82b527f483ae2c6b8",
+      "visible/receiver-state/2304885000075625.json": "13419a84303790346bf8b709886a615de7458dcdb6e171f5f82de2976c014cee",
+      "visible/receiver-state/2304917977753583.json": "4f9692a030a52b848d665ebcd44f0a3a031e49d9dfad9b82d5ab103e96e47032",
+      "visible/task.txt": "d8b23de9691ae4a141a5c6bae69dad66645fc0618bf42c557746a6c915c0fa03"
+    }
+  },
+  "13-interactive-receipt": {
+    "expected": {
+      "delivery.enterprise-files": "not_applicable",
+      "handoff.channel-submission": "fail"
+    },
+    "inputs": {
+      "fixture.json": "40e784d1279f1f91e34a3fe3a7444a6fc52439b40a773b4003c3e61a4e244e50",
+      "host/design.json": "1cbe17c7433b0eaa1b0cb11b640d7e766d85b64f4ad0f5e0a9bae9eb3a3b274f",
+      "host/events.jsonl": "86f228aa523c2c2db6992376eaae3fbea9234544813555da1a7207ee116749e8",
+      "host/execution.json": "606ae4027250e1dce23f0f944ca882d0eaeb4e543db710f2e719f93bd05a1f0f",
+      "host/retrieval-audit.jsonl": "21f4ba78f1d36eacfe22cddaaf6c01403f4b477ef651aa4a5b51ff4f218e818d",
+      "host/visible-after.json": "1944de148f04410befe93d8fa2cec1b7a5f193a15191038cc05f821691d047ea",
+      "host/visible-before.json": "1944de148f04410befe93d8fa2cec1b7a5f193a15191038cc05f821691d047ea",
+      "visible/task.txt": "0cc87689a0d0e2ef73e1b11424976fe4626635592617a628252fef3d8cdc303c"
+    }
+  }
+}

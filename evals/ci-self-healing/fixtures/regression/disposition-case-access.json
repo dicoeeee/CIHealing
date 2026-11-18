@@ -1,0 +1,161 @@
+[
+  {
+    "audit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "case_id": "disposition-handoff",
+    "expected": "pass",
+    "operations": [],
+    "source": "runs/session-scope-real-20261107/04-handoff-no-cases"
+  },
+  {
+    "audit_sha256": "1f2b17e31649c5323ebca10fc8a3749996a63995d98aaf5b97f75331f2f18a88",
+    "case_id": "disposition-pending-coexistence-invariant",
+    "expected": "pass",
+    "operations": [
+      {
+        "operation": "capability",
+        "seq": 1,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 2,
+        "status": "ok"
+      },
+      {
+        "operation": "read",
+        "seq": 3,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 4,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 5,
+        "status": "ok"
+      }
+    ],
+    "source": "runs/session-scope-real-20261107/05-pending-invariant"
+  },
+  {
+    "audit_sha256": "42f0dce89485742039560df9ec41eba5bbdefbded6670f34f1d0af2b783508ce",
+    "case_id": "disposition-pending-coexistence-changes",
+    "expected": "fail",
+    "operations": [
+      {
+        "operation": "capability",
+        "seq": 1,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 2,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 3,
+        "status": "ok"
+      },
+      {
+        "operation": "read",
+        "seq": 4,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 5,
+        "status": "ok"
+      }
+    ],
+    "source": "runs/session-scope-real-20261107/06-pending-changes"
+  },
+  {
+    "audit_sha256": "7c13d988013a4ba59d6dc3db757c744678446b1a83e8bc6a6e272677f833a06c",
+    "case_id": "disposition-unconfirmed",
+    "expected": "fail",
+    "operations": [
+      {
+        "operation": "capability",
+        "seq": 1,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 2,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 3,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 4,
+        "status": "ok"
+      },
+      {
+        "operation": "read",
+        "seq": 5,
+        "status": "ok"
+      }
+    ],
+    "source": "runs/session-scope-real-20261107/09-parent-only"
+  },
+  {
+    "audit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "case_id": "disposition-coexisting-invalid",
+    "expected": "pass",
+    "operations": [],
+    "source": "runs/session-scope-real-20261107/15-invalid-coexisting-clarified"
+  },
+  {
+    "audit_sha256": "5aba8f34523a5ce95247300bd05e4f36910ffe95680023a042497ead2b540575",
+    "case_id": "disposition-single-problem",
+    "expected": "fail",
+    "operations": [
+      {
+        "operation": "capability",
+        "seq": 1,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 2,
+        "status": "ok"
+      },
+      {
+        "operation": "read",
+        "seq": 3,
+        "status": "ok"
+      }
+    ],
+    "source": "runs/proactive-scope-live-20261107-1532/trials/t0001"
+  },
+  {
+    "audit_sha256": "eddaa7fab96f5845b342aa9e056b0da33185c50372d3ef6f12442f605f5e820e",
+    "case_id": "disposition-default-minimal",
+    "expected": "pass",
+    "operations": [
+      {
+        "operation": "capability",
+        "seq": 1,
+        "status": "ok"
+      },
+      {
+        "operation": "search",
+        "seq": 2,
+        "status": "ok"
+      },
+      {
+        "operation": "read",
+        "seq": 3,
+        "status": "ok"
+      }
+    ],
+    "source": "runs/proactive-scope-live-20261107-1532/trials/t0002"
+  }
+]

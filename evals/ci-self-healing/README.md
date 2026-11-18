@@ -3,320 +3,218 @@ ai_generated: true
 reviewed: false
 ---
 
-# CI 自愈 Skill 变更回归测试（初版）
+# CI 自愈 Skill 测试工程
 
-这是维护者使用的独立测试器，不属于 Skill 的运行上下文，不需要从 SKILL.md 或 references 引用它。没有修改 Skill 参数、状态或执行规则，也不安装全局 Skill。
+本目录是 CI 自愈 Skill 的正式测试工程。统一入口为 `eval.py`，实现位于 `harness/`。日常使用[本地回归](#日常本地回归)检查测试工程、Skill 脚本和历史缺陷。Skill 行为变更通过[新旧版本配对运行](#真实运行的选择与比较)采集新轨迹，供人工放行。
 
-整套入口是 `eval.py test`：一次命令自动完成新建现场、GLM 5.2 / Chrys 自愈执行、确定性检查、**原生 `chrys run` / GLM 5.3 独立评审**和汇总。Chrys 不设版本号白名单，按实际接口能力预检并记录版本。默认跑全部已注册用例，不需要人工传递 trial ID 或逐个拼接步骤。旧分阶段 HTTP / GPT-6 Sol 适配器和轻量原生收集器保留作调试与历史复核，不会成为整套入口的回退路径。
+当前目录有 83 个用例（43 个业务、40 个受控隔离）和 57 条判据（31 条程序检查、26 条语义评审）。Java 保持契约分别验证返回值、旧入口和禁止新增多参数公共入口。启动器失败或无法证实编译器报错时，候选构建记为证据不足。`disposition` 与 `delivery` 会复用业务用例，套件数量不能相加计算覆盖。此前规则集成分析见[集成记录](<../../10_Projects/CI 自愈研究与方案/Experiments/2026-11-17-Skill最新规则与测试工程集成.md>)。
 
-基础套件目前有三个 Java/Maven 参数不匹配案例：保持原契约、扩展契约、证据不足应停止。框架可重复执行不等于已覆盖所有 CI 问题；Profile、跨仓、C/C++ 和交互/移交案例尚未实现。
+## 用例与判据
 
-## 怎么使用
+- `spec/behaviors.json`：行为要求、当前一手规则的路径与摘要、覆盖边界。
+- `spec/criteria.json`：原子判据、适用条件、证据要求及 pass/fail/inconclusive 定义。
+- `spec/cases.json`：重新设计的场景、输入参数、宿主隐藏期望、行为机会、标签和套件。
+- `spec/legacy-case-map.json`：24 个既有素材的保留、改写、合并与补充映射。
 
-默认整套入口使用 **macOS + 本机 Chrys/JDK/Maven/rg**，无需 Docker、镜像或 wheel。自愈和评审分别使用 macOS 沙箱，编译验证在无网络的候选副本中完成；不支持的平台或缺少必需能力时拒绝执行，不退回无隔离运行。使用已安装 Chrys 的 Python，需含 PyYAML、jsonschema；Chrys 本身的 Python 要求由所选安装包决定。离线单元测试支持 Python 3.9+、不调用模型或网络；有 JDK 时额外检查真实编译。旧 Docker 后端仅供显式兼容使用。
+原有 22 个业务场景之外，disposition 套件包含 18 个分类处置场景，覆盖共存小类的处置优先级、待定共存小类是否影响选路、配置错误、人工请求附旧案例的直查，以及常规修复请求、明确限定问题和整 Job 请求 的验证续接对照。运行 `python3 evals/ci-self-healing/eval.py plan --suite disposition --max-sessions 36` 可在不调用模型的情况下查看计划。相同业务的 CLI/MCP 是传输变体，不能重复计算成不同能力。契约对照使用相同源码；空结果对照固定故障、权限和配置；查询调整场景由真实返回的新线索提供行为机会，未发生机会记为未覆盖。
 
-```bash
-python3 -B -m unittest discover -s evals/ci-self-healing/tests -v
+`delivery` 套件共七个场景。五个双目录场景要求正式报告和 `triage.json`，覆盖分类直查命中与空结果、诊断后直接交接、附案例交接命中与访问被拒。第六个场景复用直查命中的现场，同时要求 `triage.json` 和记录源码净修改的 `file_change.json`。该规范要求确认无修改时写入 `[]`。回归分别检查两份交齐和只漏任一份时的逐项结果。单目录诊断场景使用普通回复，并向本机授权接收端提交材料。接收端用例核对实际提交及回执，文件交付用例核对最终内容、校验与完整读回。已有 10–13 号原始轨迹时，可在本目录运行 `python3 -B tests/replay_delivery.py --output /tmp/ci-delivery-replay.json` 离线回放。输出路径须为新文件。
+
+对照设计、可见输入和覆盖机会的解释见[用例设计](<../../10_Projects/CI 自愈研究与方案/Architecture/2026-11-06-Skill评测用例设计.md>)。
+
+Java 场景已经独立为可直接浏览的[场景目录](fixtures/java/routing-arity-v1/README.md)：`source/` 保存故意失败的 Maven 项目，`contracts/` 和 `history.txt` 保存输入材料，`oracle/` 保存宿主独立验收代码。九个 Java 用例仍由 `spec/cases.json` 统一定义和绑定判据，运行时只复制所需可见材料；不在模板目录直接修复。C++ 暂不增加。
+
+不纳入自动选择/触发测试。当前修复案例是 Java/Maven 合成现场；检索服务是合成服务。不能由这些结果推导生产案例库召回率、其他语言、复杂恢复或远端 CI 验证能力。
+
+MCP 使用实际 SDK 做本机协议集成检查；首次真实 Agent 验收使用 CLI。具体通过项、失败项及语义评审局限见[首次验收记录](<../../10_Projects/CI 自愈研究与方案/Experiments/2026-11-06-Skill评测工程重写与首次验收.md>)。
+
+## 本机使用
+
+### 日常本地回归
+
+首次配置时，参考 [runtime.example.json](runtime.example.json) 在同目录建立 `runtime.local.json`，填入本机 Python、iCode、JDK、Maven、离线缓存及适用的配置路径。该本机文件已加入 Git 忽略规则。配置后，在仓库根目录执行：
+
+```sh
+python3 -B evals/ci-self-healing/eval.py regression --runtime evals/ci-self-healing/runtime.local.json
 ```
 
-### 一次配置，反复执行
+这条命令执行评测器和 Skill 脚本测试，再汇总三个 Java 冻结用例的 14 项程序判据。回放比较判据状态和关键证据编号，包括扩展接口、保留接口及目标不明确时已经观察到的失败。输出中的 `matched` 表示重现了预期判定。`manual_review_reference` 保存歧义用例的人工复核依据。每次结果保存在新建的 `runs/local-regression/run-*/summary.json`，确切路径见 `report_file`。使用已安装依赖的 Python 时可省略 `--runtime`，未配置的本机集成会计入跳过数。
 
-先按 [本机环境说明](environment/native.md) 准备专用 Maven 缓存和完成无模型预检，再基于 `batch.example.json` 创建本机 JSON 配置，保持 `backend: native`。填写 runtime、已安装 Chrys/Python、已选 GLM 5.3 profile、获准网关和输出根目录；相对路径按配置文件所在目录解析。配置中不写 Key。原生评审只读指定 profile，要求现有 `~/.chrys/trajectory-hmac.key` 已存在；不安装模型、不修改全局配置或创建全局密钥。
+基线清单位于 [spec/local-regression.json](spec/local-regression.json)。原始证据保存在本机忽略目录 `runs/`。证据已搬迁时用 `--source` 指向同一份已封存的 `phase2` 目录。缺少原始证据或封存校验失败会以退出码 2 结束，通过为 0，测试或回放与预期不符为 1。
 
-```bash
-EVAL_PYTHON=/absolute/path/to/chrys/bin/python
-EVAL_CONFIG=/absolute/path/to/local-batch.json
-EVAL_RUNTIME=/absolute/path/to/isolated-repair-runtime.json
+Skill 大改后的行为验收使用下方的真实版本配对运行。人工复核 `summary.json` 中的 `comparisons[].criterion_changes`，逐项检查通过变失败、证据不足、适用性变化及各自的证据编号。整例已有失败时新增的通过变失败也会标记 `regression`。离线回归结果只覆盖脚本测试及历史证据重放，当前版本的 Agent 表现以新运行的轨迹为依据。
 
-# 只显示整套选择和调用预算：不创建现场，不启动 Docker，不调用模型。
-"$EVAL_PYTHON" -B evals/ci-self-healing/eval.py test --config "$EVAL_CONFIG" --plan
+### 其他本机命令
 
-# 正常入口：全部用例，当前 Skill，每例一次。再次执行自动创建另一套全新现场。
-"$EVAL_PYTHON" -B evals/ci-self-healing/eval.py test --config "$EVAL_CONFIG" --execute-live
+本地评审结果校验依赖 `jsonschema==4.26.0`，依赖清单见 `requirements.txt`。本机已配置的 iCode Python 已包含此依赖；使用其他 Python 时，在对应虚拟环境安装清单中的依赖。缺少依赖会明确报错，不跳过 Schema 校验，也不自动修改全局 Python。
 
-# 同一批次比较 Git 基线与当前工作区，每例每版本重复三次。
-"$EVAL_PYTHON" -B evals/ci-self-healing/eval.py test --config "$EVAL_CONFIG" \
-  --mode compare --preset regression --baseline-ref HEAD --execute-live
+在仓库根目录执行：
+
+```sh
+python3 -B evals/ci-self-healing/eval.py catalog
+python3 -B evals/ci-self-healing/eval.py check
+python3 -B evals/ci-self-healing/eval.py plan
 ```
 
-本机后端直接执行上述入口，不使用 `manage.py exec`，也无需 Docker context 或预设的 `CHRYS_EVAL_API_KEY`。自愈网关按试次启动并清理，真实凭据不进入自愈沙箱。只有明确使用旧 Docker 后端才需要其环境包装器；没有跨后端自动回退。框架不自动安装依赖或启动 VM。
+`catalog` 校验规格及来源摘要。`check` 在本工程和 Skill 各自的 `tests/` 目录中发现并运行 `test_*.py`，新增单测沿用同一命名约定。`plan` 打印选择及预算。这些命令不调用模型。本机服务测试使用回环网络。
 
-| 模式 | 每例重复 | 当前自愈试次 | 最多评审会话 |
-| --- | --- | --- | --- |
-| single + smoke（默认） | 1 | 3 | 3 |
-| single + regression | 3 | 9 | 9 |
-| compare + smoke | 1 | 6 | 6 |
-| compare + regression | 3 | 18 | 18 |
+基础 `check` 会明确跳过尚未配置的本机工具集成。要复现完整检查，选择已安装 iCode 与 MCP SDK 的 Python，并提供本机工具和专用离线 Maven 缓存：
 
-`--candidate` 可指定另一份 Skill 目录；`compare` 拒绝相同快照，`single` 不要求存在版本差异。`--cases case-001,case-003` 仅用于调试子集，正常测试省略。只给 `test` 或显式 `--plan` 都不会调用模型；必须给 `--execute-live`。每次生成带时间与随机 ID 的目录；现场、Skill 快照、用例合同、评测代码、模型和环境绑定分别留存。
-
-### 用例并发与自愈时限
-
-批次配置 `max_parallel_trials` 默认 **3**，可显式设置 1～4，拒绝超过 4。协调器持有整批独占锁，按配置上限组成一轮并发执行；同一试次始终按 `run → grade → review` 串行推进。本轮所有在途阶段完成并保存证据后，才生成汇总、派发下一轮。较快用例会等待同轮较慢用例，避免汇总读取尚未写完的证据。
-
-会话总预算仍由唯一协调器管理：每个自愈或评审阶段提交给工作线程前，先写不可覆盖的 started 日志并预留一次；grade 不消耗模型会话名额。日志记录 segment、wave、并发上限和全批会话预留序号。即使预留后未能启动，名额也不退回；中断、未知结果和已失败的阶段不自动重放。三个单次用例最多为 **3 次自愈 + 3 次评审**，显式选择四例则最多为 **4 次自愈 + 4 次评审**；并发不会扩大 `max_agent_invocations`。
-
-工作线程继承同一个批次绝对截止时间；`max_wall_seconds` 按整批墙钟累计，不按线程数量倍增。清理使用自己的有界收尾上下文，不重置其他用例的截止时间。共享环境/模型身份变化、鉴权/限流错误、证据不完整和清理不确定仍停止整批：停止派发，通知在途进程组取消，等待各自网关及归属资源清理、回执落盘，再结束段记账。已启动的会话仍可能产生费用，取消不退款、不回退模型。单例有确认清理证据的超时仍按原合同处理，允许其他独立用例继续。
-
-每个试次继续独占源码现场、Maven 缓存副本、临时配置、网关端口/临时令牌、会话与审计目录；并发不扩大沙箱读写权限。共享运行/评审绑定通过锁串行创建并核对同一身份；差异不会被覆盖。评审仍使用原有独立证据包、模型身份检查和清理判据。
-
-GLM 5.2 自愈默认时限改为 **900 秒**；GLM 5.3 评审仍为 900 秒，工具数、token/profile 限制及批次会话/墙钟预算保持原值。`runtime.example.json`、环境准备器与新冻结配置均使用该自愈默认值；显式配置的其他时限仍按配置执行。`freeze.py` 默认生成并发数 3、自愈 900 秒的新快照，可用 `--max-parallel-trials 1`（串行）、`--max-parallel-trials 4` 或 `--repair-timeout-seconds N` 显式覆盖。历史冻结、运行、报告与回执不修改；旧的显式 600 秒配置不会被加载器静默改写，需要创建新的配置或冻结版本。
-
-### 结果、续跑与预算
-
-标准输出和 `summary.json` 提供机器可读结论，`summary.md` 提供用例清单；按版本、用例和重复次数汇总。`compare` 另给 after 减 before 的计数差，不把小样本差异宣称为统计显著改进。
-
-每次运行目录默认仅当前用户可访问，包含：
-
-```text
-run-<time>-<id>/
-  batch.json                         # 冻结的配置、计划、评测器摘要
-  environment-binding.json           # 实际环境和模型绑定
-  summary.json / summary.md           # 可重新生成的汇总
-  suite/skills/                      # 本轮 Skill 快照
-  suite/trials/<id>/                  # 独立现场、run/grade/review.json、公开执行轨迹
-  reviews/<id>/                      # 冻结的评审输入、原生进程回执、session/trajectory
-  journal/<id>/                      # 每阶段的 started/finished 及产物摘要
-  segments/                          # 每次执行/续跑的时间记账
+```sh
+CI_EVAL_V2_NATIVE_RUNTIME=/absolute/path/runtime.json \
+CI_FIXTURE_MAVEN=/absolute/path/mvn \
+CI_FIXTURE_JAVA_HOME=/absolute/path/jdk \
+CI_FIXTURE_MAVEN_CACHE=/absolute/path/offline-maven-cache \
+/absolute/path/icode-environment/python3 -B evals/ci-self-healing/eval.py check
 ```
 
-定位失败先看对应 trial 的 `grade.json`（确定性失败/缺口），再看 `review.json` 和 `reviews/<id>/assessment.json`（评审与记录缺口）；阶段没有完成则看 journal 的错误记录。不要直接修改这些文件把状态改成通过。
+这些集成使用本地固定响应，不请求真实模型。检查 stderr 中的跳过项，不能将基础检查成功等同于完整本机集成通过。
 
-`assessment.json` 只记录公开输出和 session 的前置检查，尚未读取 exchange 轨迹，因此其中保留的 `formal_evaluation_status` / `call_record_gaps` 不是完整批次总评。新增轨迹检查的最终结论在 `review.json` 的 `status` 与 `model_receipt`，整套结论在 `summary.json`。这些分层记录不互相覆盖。
+规则来源变化时检查拒绝静默沿用判据。先核对受影响的行为和用例，再更新来源摘要；不要只刷新摘要来跳过评审。
 
-- `passed`：确定性与完整语义评审均通过；`failed`：已完成检查得到失败证据。
-- `incomplete`：超时、轨迹/评审缺失、无效输出或执行结果不确定；`not_run`：尚未启动。
-- 退出码 `0`：全通过；`1`：全部完成但有失败；`2`：存在未完成、未运行或批次被阻断。模型 pass 不能覆盖确定性失败。
+`delivery.spec-reread` 检查固定企业规范的独立复读是否在第一份正式报告或必交文件生成前完成，且晚于已观察到的候选修改、验证和案例返回。它复用绑定正文、完整分段读取及版本核对，初读不能充当复读。判据的通过仅涵盖这些可观察的读取和时序事实，诊断与最终复核是否充分仍按相关语义判据核对。
 
-```bash
-"$EVAL_PYTHON" -B evals/ci-self-healing/eval.py test --config "$EVAL_CONFIG" \
-  --resume /absolute/path/to/existing-run --execute-live
+常规现场由宿主明确声明本试次独占的构建源码目录、任务身份和专用缓存目录。声明不扩大修复权限，实际动作仍受本次策略、准入及隔离约束。写入前的指南检查增加企业策略先于工作空间规则的顺序检查。
+
+命令执行拆为三组独立程序项与剩余语义项：
+
+| 程序检查 | 剩余语义评审 |
+| --- | --- |
+| `command.execution-bounds`：记录的命令级时限，明确等待时缺少有效时限 | `command.preparation`：入口与包装理解、必要输入及授权 |
+| `command.stop-before-retry`：当前等待、停止确认、副作用核对和恢复/重试的顺序 | `command.wait-control`：当前提示、输入含义和交互授权 |
+| `command.effect-observation`：命令终态、目标效果及交付前的观察顺序 | `command.result-check`：交付表述是否符合实际效果 |
+
+`harness/command_checks.py` 生成程序结论和供评审模型使用的事实清单，不从自由文本中推测进程状态。效果与期望不符仍可能满足“已观察效果”的程序项，不能据此宣称操作成功。程序和语义结果独立保存，任一项明确失败都不能被另一项通过抵消。
+
+受控校准使用结构化合成记录。原生适配通过 iCode 公开事件保存经过字段白名单过滤的实际退出、超时和后台状态，并绑定调用 ID 与参数摘要；显式时限和本次安装工具的默认时限分别留档，不能据此证明操作系统强制了时限。旧轨迹缺少这些字段时保持证据不足，不补写事实。
+
+适用性先于评分：完整且范围可识别的记录确认没有相关机会时，记 `not_applicable`，不计通过或能力覆盖；确认有机会但缺收据时，保留适用并记 `inconclusive`；连机会也不能确认时，适用性为 `unknown`。原生停止判据只对无超时、后台或停止触发的受支持正常前台命令确认不适用；现有公开后台视图不能证明所有子进程已消失，不能据此判停止后重试能力通过。
+
+效果收据按操作类型区分：有限语法的 `/bin/cp` 需要源与目标版本、实际终态，以及交付前由 Agent 完整 `read_file` 读回同一目标版本；宿主文件快照不能代替该读回。Maven 构建记录绑定未变化的项目输入与实际可见退出结果，仅证明结果已被观察，不证明某个测试运行、覆盖目标或修复正确。已识别的系统绝对路径只读命令无修改效果时可记不适用；复杂 shell、自定义同名命令、远端操作及不透明执行保持证据不足。详情见 [Q21 适用性与原生收据记录](<../../10_Projects/CI 自愈研究与方案/Experiments/2026-11-17-Q21命令适用性与原生收据.md>)。
+
+放行材料是 `command-holdout-v2`。它是旧卷的定向修订，不是全新盲测集：仅将第一题的独占工作目录与允许的输出路径写入可信任务，原六条轨迹和标签都不变。原卷 `command-holdout-v1` 只供历史回放，不得用于新放行。评审只见由证据摘要生成的编号。六份材料涵盖通过、失败、适用性未知与不适用；仅涉及三条命令语义判据，不证明 Java 阶段其余十条已校准。
+
+较早的 `command-control-split-v2` 是三个命令判据的正反对照开发集。`command-control-v1`、`command-control-split-v1` 的材料、标签和冻结运行也原样保留。详见[交互授权对照记录](<../../10_Projects/CI 自愈研究与方案/Experiments/2026-11-17-交互授权校准正反例补齐.md>)。
+
+在仓库根目录执行 `python3 -B evals/ci-self-healing/eval.py calibrate --suite command-holdout-v2 --concurrency 6 --prepare-only --output /absolute/path/new-command-calibration` 只冻结材料。在本目录执行 `python3 -B tests/replay_command_split.py --output /absolute/path/new-command-replay` 可回放 Q19 和三个旧 Java 轨迹，不调用模型、不覆盖旧评分。真实批次沿用 12 次会话、90 分钟总上限：先独立评审 6 次；只在当前版本的六份真实评审均通过标签、证据和理由检查后，再执行三个 Java 用例与三次独立评审。第一阶段未通过就停止，不自动重试。
+
+在本目录执行 `python3 -B tests/replay_command_attribution.py --live runs/boundary-validation-20261118/live --output /absolute/path/new-attribution-replay`，可用上轮冻结证据核对授权修订，并对比原评审理由和测试中编写的仅陈述矛盾的对照理由。此回放不产生新模型回答或放行结论。
+
+Q21 收据验证可在本目录运行 `python3 -B tests/replay_command_receipts.py --runtime /absolute/path/runtime.json --output /absolute/path/new-q21-verification`。它先只读回放旧证据，再通过本地固定响应驱动已安装 iCode 的复制与超时工具，保存新观察和封存摘要；需要本机回环与沙箱权限，不请求真实模型、不续跑 Q19。
+
+真实运行需要显式指定本机配置与 `--execute-live`：
+
+```sh
+python3 -B evals/ci-self-healing/eval.py doctor --runtime /absolute/path/runtime.json
+python3 -B evals/ci-self-healing/eval.py calibrate --runtime /absolute/path/runtime.json --output /absolute/path/new-calibration --execute-live
+python3 -B evals/ci-self-healing/eval.py run --runtime /absolute/path/runtime.json --output /absolute/path/new-run --execute-live
+python3 -B evals/ci-self-healing/eval.py report --run /absolute/path/new-run
 ```
 
-续跑不接受重新选版本/用例。已完成阶段先核验摘要再跳过，已完成自愈但尚未评分时直接继续评分；已报错、中断或结果未知的阶段绝不自动再次调用模型。其余尚未开始的用例可以继续。整个批次已无可执行阶段时，只复核证据和汇总，无需 Docker/模型在线。若协调进程被强杀、段结束记录缺失，拒绝续发付费调用，先人工核对遗留进程/容器，再建立新批次；不猜测旧调用是否扣费。修改配置、评测代码、用例或环境后需新建批次，保留旧证据。
+配置只保存选定工具/profile路径及模型身份，不保存密钥。执行路径会切换到配置指定的 Python；使用本机已安装 iCode、JDK、Maven 和专用离线缓存，不自动安装依赖。实际进程仍受 macOS sandbox-exec 限制；外层沙箱不允许嵌套时应按宿主权限机制处理，不能移除内部隔离。
 
-`max_agent_invocations` 限制自愈和评审的**启动次数之和**，开始前保守预留一次；不是 LLM 请求/token/费用上限。自愈内部有多轮请求，原生评审 SDK 也可能有内部重试；这些不等于额外 Agent 启动。`max_wall_seconds` 跨续跑累计执行墙钟，单次调用同时受自身时限限制；到限停止新工作，另留有界时间回收本次容器/进程。一次 Skill 行为失败不会阻断其他用例；执行异常按既有 `typed-v1` 故障分类决定继续或停止，不按非零退出码猜测共享故障。旧 `stop_after_transport_errors` 字段仅兼容解析，不再控制分类。语义格式错误不自动修补、重试或提高预算。
+配置示例见 [runtime.example.json](runtime.example.json)。真实 profile 仅由可信父进程读取；真实凭据通过内存和管道交给独占网关，隔离执行器仅从环境取得本地短期令牌。执行器和无工具评审器通过该受限网关访问选定模型，凭据不能写进配置、命令行或报告。
 
-### 原生评审的验收边界
+请求模型短名和提供方响应版本可能不同。使用部署方确认的 `execution_response_model_id` / `review_response_model_id`；未声明时按请求 ID 核对，出现不同标识保留身份缺口。不能仅从一次响应或名称前缀自动推定映射、修改旧结论。
 
-整套入口先记录实际版本，无网络核验 headless CLI 所需选项、内置 QA、轨迹写入接口和沙箱，再用原生 CLI 运行冻结的完整评审输入。评审配置无需填写 `version`；旧配置中的该字段仅为迁移兼容而接受，不作为版本限制，回执以实际 CLI 版本为准。同一批次仍绑定实际环境，升级后新建批次，不能混用版本产生的证据。评审器通过证据包取证，沙箱不允许读取原修复工作区、其他用户项目、其他 profile 或历史会话；允许读取必要系统/Python 文件及指定模型配置，写入仅限本次会话、临时目录和现有轨迹密钥的精确锁文件。宿主不切换 HOME，不改模型配置。在线网络规则限 TCP 443 和 DNS IPC，**不是网关域名白名单**；指定 endpoint 和会话核验不证明阻断了所有其他 HTTPS 目标，也不继承旧 HTTP 适配器的禁止重定向保证。
+## 选择与比较
 
-验收同时检查公开输出的 Schema/证据/时序、进程完成、原生 session 元数据与冻结输入一致，以及 `trajectory/events.jsonl`：单一新会话/覆盖区间、连续序号、完整关闭、恰好一次成对的主 Agent 模型 exchange，请求/响应模型均为 GLM 5.3。显式 stop 可用于完成判定；Responses 正常完成若省略 finish_reason，则必须额外核对 accepted validation、单次且无函数调用的成功 cycle、completed run/turn，以及各开始/结束记录的 ID、父子关系和顺序。缺省值保留为 null，不补写 stop；这证明原生客户端正常完成，不冒充已采集服务端 response.completed 原始事件。轨迹格式不兼容或证据缺失仍为 incomplete；不限制版本不等于保证任意版本均兼容。
+### 工作空间隔离离线套件
 
-工具、子 Agent、压缩、重试事件、覆盖缺口、模型不匹配或缺失记录都不算通过。内置 QA 本身仍带读取类工具；“不使用工具”是提示要求与事后验收条件，不等于工具从 CLI 中被移除。当前只接入本仓合成材料，不适合作为运行任意恶意证据的安全边界。Chrys exchange 记录不能审计 SDK 内部每次 HTTP 重试，也不能独立证明服务商实际后端。
+`isolation` 包含 40 个受控离线场景和 6 项独立判据：工作空间绑定、写入范围、共享状态、合法修复/独立交付、隔离异常处置，以及候选的后续执行效果。用例仍在 `spec/cases.json`，规则及判据仍由 `behaviors.json`、`criteria.json` 维护；`harness/workspace_isolation.py` 提供一次性现场、受控操作记录及确定性检查，复用现有评分入口、冻结快照、结果汇总和证据封存。
 
-保留原生 session/trajectory 供本机复核，报告只摘取必要回执和摘要，不把隐藏推理作为证据发送。原生会话文件本身可能含模型内部内容，整个 `runs/` 不得提交或上传。评审输出 token 上限沿用所选 profile，并记录该值；不同于旧 HTTP 适配器的 16384 token 参数。墙钟/输入字节/会话数限制不等于精确 token 费用上限。当前实现宁可输出 incomplete，也不根据模型自述猜测调用完整性。
+在仓库根目录执行（仅标准库，不需要模型或 runtime 配置）：
 
-### 如何扩展用例
-
-企业关键词检索使用独立的可选套件：`eval.py prepare-handoff --case-suite keyword --candidate skills/ci-self-healing --output <新目录>`。它冻结 Skill、查询策略、模拟索引、CLI 和评审口径，准备十个独立的只读诊断现场；该命令不调用模型，可用 `--keyword-cases <逗号分隔的场景ID>` 选择定向子集。执行 Agent 只接收各自 `visible/task.txt` 和指定 Skill，通过接入说明中的 CLI 访问案例。CLI 按标题的实际关键词匹配，记录帮助核对、查询、原文与时间；企业策略使用不同自然语言写法，不要求模板。案例包括相同现场的优先级对照、条件跳过、显式/自主调整、通用兜底、预算、未配置策略和拒绝访问。`refine-windowed` 的首查页不含适用案例，用于区别“直接采用已有候选”和“结果不足后追加查询”的实际覆盖。
-
-实际 Agent 完成后，用 `eval.py audit-keyword --trial <试次目录>` 核对冻结输入、返回内容、搜索/原文计数及可观察访问时段。该结果的 `facts_status` 与独立评审的语义结论分开；评审依据冻结的 `review-contract.json`、实际工具轨迹、CLI 记录和报告，不能用命中或单元测试通过代替策略执行正确。CLI 记录仅覆盖首次能力/访问至最后访问，适用性比较耗时另由轨迹核对。此套件不提供原生 iCode/GLM 运行收据，也不声称提示范围具有操作系统隔离；已有五个 MCP 交接样例和历史评审口径保持独立。
-
-用例注册入口是 `cases.py` 的 `CASES`：稳定 ID、预期行为类型、对 Agent 可见的 MR 契约。现有 `materialize()` 生成独立现场与 Git 历史；`oracle()` 定义不暴露给 Agent 的行为验收。增加当前 Java 模板下的契约变体不需要改批量调度器，默认整套命令自动纳入。改变语言、源码结构或判定机制时，需要扩展 fixture/build-probe/grade 适配层及其离线测试，不能只加一个分类名称就宣称支持。
-
-每个新用例应同时包含：可复现的真实失败、足以决定修法或应停止的证据、允许/禁止变更范围、独立行为断言、报告与副产物检查。验收不比较固定 Patch；增加已知正确、错误及信息不足的测试变体，防止评分器奖励“一律修绿”或“一律 stop”。用例定义和实现摘要被冻结，续跑时变更即拒绝混用。
-
-## 分阶段与历史调试入口
-
-以下命令用于定位框架问题或复核旧 suite。日常回归使用上面的 `test`，不要人工串联这些命令代替整套运行。
-
-```bash
-python3 -B evals/ci-self-healing/eval.py prepare \
-  --baseline-ref HEAD --candidate skills/ci-self-healing \
-  --output /absolute/path/to/new-eval-suite
-python3 -B evals/ci-self-healing/eval.py summary --suite /absolute/path/to/new-eval-suite
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -B evals/ci-self-healing/eval.py check --suite isolation --output /absolute/path/new-isolation-run
+python3 -B evals/ci-self-healing/eval.py report --run /absolute/path/new-isolation-run
 ```
 
-`prepare` 默认比较 Git HEAD 中的 Skill 与当前工作区，包括尚未提交的 Skill 修改；也可以用 `--baseline-dir` 指定旧版本目录。两个快照相同会拒绝准备。`--repeats 1` 可先生成六次冒烟试次。输出目录必须不存在，结果默认不覆盖；失败试次重测时重新 prepare，不改写旧证据。
+输出目录必须不存在。每个试次保留可信来源/归属、实际路径及 inode、操作尝试和效果、文件读回、子进程结果与独立合成 Oracle。受控子进程只操作一次性现场；符号链接和硬链接的目标也在该现场内。读回发生于每次受控写入之后，因而可以识别“修改共享定义后恢复原字节”的负例；这不是对任意脚本的系统调用审计。
 
-新 suite 默认 `--reviewer glm-5.3`；可显式指定 `--reviewer gpt-6-sol` 保留旧适配器。评审器在准备时写入 suite，后续不能静默换模型；需要转换时重新 prepare，不修改旧记录。
+脚本场景实际修改临时工作空间中的 `build.sh`，由后续独立进程执行已绑定版本。用例覆盖本轮未执行但候选引入禁止写入、后续步骤越界、默认目标、条件分支、任务内合法写入，以及目标未知时停止或错误交付。记录脚本字节/摘要、入口、执行输入、停止/交付决定和流水线收据；实际效果归因不只依靠 Agent 子进程关系。候选安全与已经发生的共享污染分别判分，语法检查通过或普通分支通过不替代后续效果判断。影响分析证据来自固定受控模板，不宣称具备任意 shell 脚本分析能力。
 
-`suite.json` 保存私有的新旧版本映射、案例答案、快照摘要及随机顺序。每个试次用不含方向信息的 ID，模型只看到自己的 `visible/` 和只读 Skill 副本，不能访问整个 suite、其他试次、评分器或行为 Oracle。
+结果中的 `checks` 表示判分是否匹配预声明标签，`observed_checks` 和 `scripted_verdict` 保留受控操作自身的判定。故意越界的负例被判失败、缺证轨迹被判无法确定，均可使校准通过；不能将套件的通过数写成 Skill 的隔离通过率。`models_called: false`、`live_agent: not_run`、`host_enforcement: not_tested` 明确记录验收边界。模拟拒绝收据不证明操作系统已阻断写入；远端模式仅验证合成目录/交接条件，不连接真实 CI。
 
-## 旧 Docker 分阶段运行的前置条件
+套件覆盖企业不同来源、来源缺口与冲突、同名/嵌套/分离目录、共享资源直接与子进程写入、链接与相似路径、交付越权、任务私有替代、边界变化、日志诱导、并发更新后的异常处置及无提取脚本调用。真实 Agent、任意命令副作用的完整观测、挂载和宿主强制防护留待后续验收。离线用例不能通过 `run` 或 `--cases` 启动模型；原有 `all` 套件仍只包含可用于真实运行的用例。
 
-本节只说明显式选择旧 Docker 后端的兼容方式；默认本机路径见前文，不需要本节镜像或服务。两种后端均不自动切换隔离方式。测试器不拉取镜像、不安装工具、不启动 Docker 服务、不修改现有 Chrys/Codex 配置。本节分阶段 `review` 的 GLM 评审端是受信 HTTP 客户端；整套 `test` 则使用上文原生 Chrys 沙箱评审，二者不混用。
+`check` 的常规工程测试会发现 `tests/test_workspace_isolation_v2.py`。这些测试还验证证据丢失不会被当作通过、现有进程组清理能停止延迟子进程，以及保存证据被修改后不能复用结果。当前报告样例已同步构建工作空间字段；旧运行目录和证据保持原样。
 
-需要显式准备本地环境时，可按 [隔离环境说明](environment/README.md) 使用独立辅助脚本；它与 `eval.py run` 分开执行。环境冒烟不等于真实自愈验证，也不等于语义评审完成。
+### 真实运行的选择与比较
 
-自行准备并审核固定 digest 的 Linux 镜像，包含：
-
-- 显式选择的 Chrys 安装包（包含其 headless 依赖），满足该包要求的 Python、Git、rg、JDK 17+、Maven；没有固定 Chrys 版本要求。
-- 容器普通用户的 home 为 `/home/eval`；可按宿主 UID/GID 运行。容器根文件系统只读，`/tmp` 和 `/home/eval/.chrys` 是限额 tmpfs。
-- `/opt/maven-repository` 含本案例离线构建所需完整缓存：resources-plugin 3.4.0、compiler-plugin 3.14.0 及其依赖。没有在线下载回退。
-- 正确的 Java/Maven 环境配置。镜像中不带历史会话、私人记忆、其他仓库、真实 CI/Git 凭据或其他隐含模型配置。
-
-准备专用 **internal Docker 网络**，通过受控网关/代理仅提供模型服务；测试容器自身不能直接访问互联网。默认 bridge、host 网络及非 internal 网络均被拒绝。测试器只核查 Docker 的 internal 属性，**不能证明网关的域名白名单或认证策略**，这部分需要部署者核查。模型网关不可用时记录执行不完整，不记 Skill 失败。
-
-从 `runtime.docker.example.json` 建立本地 runtime 配置，填入真实镜像 digest、internal 网络、独立的 Chrys 配置目录、Agent profile 和实际请求模型 ID。新建 Docker 现场时给 `prepare --backend docker`；整套配置显式给 `backend: docker` 与 `docker_context`。默认的 `runtime.example.json` 属于本机后端，两者不能混用。示例占位符不能运行。
-
-独立 Chrys 配置目录应仅含必要的设置、`EvalCode` Agent profile 和名为 `huoshan-glm5.2` 的模型 profile，不要复制整个 `~/.chrys`。不要启用其他模型路由、子 Agent、无关 MCP、hooks 或记忆；测试任务中的无交互约定与生产场景对齐。模型凭据在 profile 中引用 `{{CHRYS_EVAL_API_KEY}}`（Chrys 的环境变量模板语法），由外部秘密注入设施提供同名环境变量；不要把凭据写进 runtime JSON、案例或仓库。配置复制到容器 tmpfs，原目录只读挂载。使用本目录的隔离网关时，此变量仅为本地网关令牌，不是真实上游 Key。
-
-```bash
-python3 -B evals/ci-self-healing/eval.py doctor --runtime /outside/runtime.json
-python3 -B evals/ci-self-healing/eval.py run \
-  --suite /absolute/path/to/new-eval-suite --runtime /outside/runtime.json \
-  --trial trial-XXXXXXXXXXXX --execute-live
-python3 -B evals/ci-self-healing/eval.py grade \
-  --suite /absolute/path/to/new-eval-suite --runtime /outside/runtime.json \
-  --trial trial-XXXXXXXXXXXX
-/absolute/path/to/chrys/bin/python -B evals/ci-self-healing/eval.py review \
-  --suite /absolute/path/to/new-eval-suite --trial trial-XXXXXXXXXXXX \
-  --review-profile /absolute/path/to/huoshan-glm5.3-profile.yaml \
-  --max-packet-bytes 524288 --max-output-tokens 16384 --timeout 600 --execute-live
-python3 -B evals/ci-self-healing/eval.py summary --suite /absolute/path/to/new-eval-suite
+```sh
+python3 -B evals/ci-self-healing/eval.py plan --cases repair-contract-preserve,repair-goal-ambiguous
+python3 -B evals/ci-self-healing/eval.py plan --suite all --tags retrieval --max-sessions 44
+python3 -B evals/ci-self-healing/eval.py plan --baseline /absolute/path/old-skill --repeats 3 --max-sessions 96
 ```
 
-`--trial` 用 prepare 生成的真实 ID；省略表示全部试次。这些是调试命令，整套入口无需人工传递 ID。`run` 和 `review` 都必须明确给 `--execute-live` 才会调用模型。18 次执行和最多 18 次评审不是一次模型调用；时间/工具调用限额不等于精确费用上限，token 费用需结合服务端账单核对。
+比较时两版使用同一组场景、判据和模型配置，按相同案例及重复编号配对；旧版路径应是完整 Skill 快照。预算不足的计划直接拒绝，不暗中缩小用例集。未完成试次不纳入退化/改善比较。重复次数是显式配置，不能将一次试跑写成稳定通过率。
 
-GLM 评审使用现有 Chrys Python（含 `httpx`、`PyYAML`、`jsonschema`），显式读取名为 **huoshan-glm5.3**、provider 为 `openai`、接口为 `responses` 的非 Flash profile。仅复用其模型连接信息，不启动 Chrys Agent，也不加载历史会话、记忆、其他配置或工具。原始凭据只在可信客户端内存中用于认证，不传给模型、不复制进 suite。每次评审是一条新请求：`tools=[]`、`tool_choice=none`、`store=false`，不传会话或 continuation ID；不重定向、不自动重试或降级。响应声明 `json_schema`，同时在本地再次校验 Schema、证据引用和时序。拒答、截断、工具调用、模型 ID 不匹配和格式不符均记 incomplete。
+日常先运行离线检查；行为变更选择相关真实场景；版本验收再运行约定核心集合。新增同一现场类型的普通场景只需声明数据和判据；新增现场能力或新的可观察行为仍可能需要扩展 fixture/checker，并补有意义的工程测试。
 
-GLM 评审默认 `--max-output-tokens 16384 --timeout 600`，前者包括推理和公开输出。token 参数允许 1–32768，实际使用值不超过 profile 上限；不会直接采用 profile 中很大的最大值，也不会因截断自动加预算重试。墙钟参数允许 1–1800 秒，与 token 数分别限制；显式增加 token 时也应按实测速度调整时限。worker 到期停止请求并输出 incomplete，父进程另留 5 秒仅用于结束及保存诊断，超出仍强制终止。旧 Sol 默认时限仍为 300 秒，不接受 GLM token 参数。
+## 首期运行约定
 
-GLM 评审证据包默认 `--max-packet-bytes 524288`（512 KiB），允许 1–1048576 字节。按完整 packet 的规范化 UTF-8 JSON 计量，不按字符数计算；文件和事件全部保留，不去重、摘要化或截断。stdin 封装上限为 packet 预算加 64 KiB，HTTP 请求上限为该值的两倍，为 rubric、Schema 和 JSON 字符串转义留出空间。三层分别测量，父进程预检后 worker 再检查；发送的就是经过测量的请求字节，摘要与大小写入诊断。超过任何上限均停止，不因提高 packet 上限而取消传输边界。
+先用 6 份固定证据检查独立评审器：正确、错误、缺证各 2 份。标签由 Agent 先依据明确事实交叉检查，记录 `agent_checked`；不确定项交人工裁定，不称人工金标。这是初步校准，不是准确率估计。
 
-字节预算不是模型 token 上下文保证。请求显式设置 `truncation=disabled`，不使用压缩或历史裁剪；服务端上下文不足、拒绝请求或输出不完整仍为 incomplete，不自动重试或扩大预算。兼容服务是否真正执行该参数不能仅由 HTTP 200 证明。旧 Sol 路径保留原 256 KiB packet 上限，不接受此 GLM 参数。
+Q20 确认的校准放行标准是六份评审同时满足：格式与引用合法、状态与适用性标签正确、关键理由有证据支持。`calibrate` 完成自动检查后，即使六份全部匹配，也只返回 `pending_rationale`，`phase2_permitted` 保持 `false`。理由须由 Agent 逐项复核；记录缺失、不完整或判断为未知时不能放行，未知项标记需要人工裁定。已有充分失败依据不能抵消附加的、会影响结论或规则理解的无据断言。
 
-`reviewer-binding.json` 固定模型请求 ID、脱敏配置摘要、传输/容量代码、评审规则、Schema 摘要、三层输入容量、请求/有效 token 上限和时限；不包含 Key，正常密钥轮换不改变绑定。已有绑定后修改预算或评审配置须新建 suite，不覆盖旧证据。首次容量预检失败不会新建绑定或开始模型调用；没有绑定和评审输出时，可修正容量后继续评审原有、绑定仍有效的修复证据，无需重跑自愈。成功回执还须匹配父进程预检的完整 packet 和实际 HTTP 请求摘要。
+校准最多 6 次独立评审、30 分钟。首次真实试跑固定同一份 Skill，使用 smoke 的 8 个代表场景，各 1 次，最多 8 次执行和 8 次评审、2 小时。单阶段最多 900 秒，并发最多 3。合计上限为 22 次独立 Agent 会话；会话内部可能包含多次模型请求，不能将会话数当 API 请求数或费用。
 
-记录响应模型身份及用量，但接口返回的身份不是对服务商实际后端的独立证明。GLM 5.2 与 5.3 来自同系列：这里的独立指上下文、执行权限及证据隔离，不保证错误统计独立；仍须用人工标注样例校准。
+调用前原子预留并持久化会话预算；超时、进程故障或身份缺口不自动补跑。目录已存在时拒绝覆盖或重放。失败启动也保守占用预留，避免不明结果导致超额调用。批次启动前的人工确认不计入该批次墙钟；批次开始后时钟持续推进，不因人工等待暂停。
 
-传输遵循 profile 的 `stream` 设置，并纳入配置摘要；[流式响应](https://developers.openai.com/api/docs/guides/streaming-responses)只接受完整的 `response.completed`，不会把片段当结论。两种传输都受整体时限及响应字节预算限制。输出 Schema 同时放入接口参数和显式提示；当前兼容链路的短对照曾返回违反 `strict` Schema 的结果，因此标记 `schema_enforcement=local_required`：worker 和评审汇总分别校验，不把服务接受参数当作格式保证。拒绝重复 JSON 字段、NaN、Markdown 围栏和缺失字段，不自动修补输出或修改结论。
+## 证据与结果
 
-`review-execution/stderr.log` 实时保存安全进度；`stdout.log` 保存单个结果回执，成功和失败均有明确 status。诊断包含阶段/耗时、HTTP 状态、终止原因、事件计数、用量及 Schema 失败路径；完整或 incomplete 终止响应中的公开文本最多留存 128 KiB，并明确标记诊断截断，不影响原始响应的严格校验。不保存响应头、原始响应体、隐藏推理或加密推理。`review.json` 会保留 worker 的失败诊断；若父进程被迫终止而回执缺失，明确记为 `worker_receipt_unavailable`，不能猜测失败原因。
+每个新运行冻结 Skill、规格、模型/工具身份、实现摘要和计划；每个试次保留现场、公开轨迹、独立验证、逐项判分、评审输入/输出与证据摘要。宿主 Oracle 和期望结果不向被测 Agent 开放。
 
-主要错误码：`output_token_limit`（推理/输出预算耗尽）、`wall_timeout`（整体超时）、`transport_timeout`（网络读写超时）、`schema_invalid`（结构不符）、`semantic_invalid`（证据或时序等校验失败）。它们均为评审 incomplete，不等于被测 Skill 失败；只有全部校验通过的评审 verdict 才参与汇总，仍不能覆盖确定性失败。
+评审输出以共享的 [JSON Schema](harness/review.schema.json) 为基础：根对象仅有 `checks`，每项必须且只能包含 `criterion_id`、`applicability`、`status`、`evidence_ids`、`reason`。普通测试、校准和重评均按本次选定判据及证据 ID 生成专用枚举约束；提示中的 `allowed_ids`、请求 Schema 和本地校验使用同一白名单。提示另列 `id → kind`，说明证据类型不能代替引用 ID。校准的 `contracts/` 与提示、样本一起封存，不包含预期标签。
 
-仅旧 Sol suite 需要 Codex CLI 已获准使用 **gpt-6-sol**：全新 `codex exec`、high reasoning、忽略用户 config/rules、read-only sandbox、ephemeral session、`--output-schema`。该路径不接受 `--review-profile`，也不会在访问失败后替换模型。
+请求侧由 Harness 注入 `strict: true`，不开放任意 profile 额外选项；修复 Agent 不使用该格式约束。网关转发前核对实际 Responses 请求中的 `text.format` 与选定格式完全一致，缺失、放宽或替换时拒绝转发。网关只记录格式及 Schema 摘要、封闭性标志和公开返回文本摘要，不记录提示或凭据。评审收据核对返回文本与客户端保存的答案一致；无法确认时保留缺口。真实服务端是否遵守约束仍需后续验证，拒绝时不自动降级或重试。
 
-## 原生 Chrys 评审：最小准备与记录
+本地按“严格 JSON 解析 → 专用 JSON Schema → 判据/证据约束”顺序检查。重复键、非有限数、多余字段（包括 `title: null`、`reason_note: null`）、缺字段、错误类型或枚举均不能被采纳；结构合法后仍检查判据集合、适用性关系、证据存在及完整性。错误分类区分结构、引用、适用性一致性及证据支持问题；字段诊断只保留位置与规则，不回显字段值或未知字段名。原始回答保留，不删字段后改记通过。格式与引用合法不代表理由中的每个推断都成立。
 
-`review_chrys.py` 只有 `prepare` 和 `collect`，均为离线操作，不启动 Chrys、不读取凭据、不发请求、不修改全局配置或原 suite。与 HTTP/Sol 评审共用输出合同：五个固定评审项各自填写 `id/status/evidence/explanation`，先给 Schema 和完整字段骨架，再给证据；骨架中的占位符不是默认结论。提示词不是强制格式保证，仍须本地校验。
+Q19 六份冻结输出的离线回放可运行 `python3 -B tests/replay_review_protocol.py --source runs/q19-two-stage-20261117 --output /absolute/path/new-review-replay`。脚本核对原结果和输入封存摘要，保留两份原始无效输出，检查其余四份标签不变，并将纠正已知协议缺陷的合成对照单独保存；不调用模型、不续跑 Q19。详情见[评审协议修复记录](<../../10_Projects/CI 自愈研究与方案/Experiments/2026-11-17-评审输出协议修复与冻结回放.md>)。
 
-时序字段统一引用**观察到源码变化的事件**，其 `changed_paths_since_previous_event` 必须包含本案例 Java 源码路径；不能用编辑工具的调用开始事件代替结果快照。模型仍负责判断候选、实验及准入的含义，脚本不按顺序替它猜评审项，不擅自修正事件编号。
+新版 `command.result-check` 的宿主理由复核须显式检查是否给 Agent 的决策归因：`attributions: null` 为未审，`[]` 表示复核者确认没有此类断言。有归因则逐项绑定评审原话；要标为有据，须另引轨迹中 Agent 本人的陈述（证据 ID、事件序号和原话），不能用工具输出或退出码代替。程序核对引文和位置，复核者判断语义是否支持，Agent 自述也不能证明真实动机。模型仍输出原五个字段，历史复核仍按原格式读取。
 
-准备单个试次的完整评审输入，输出必须是 suite 外的新目录：
+理由复核是宿主单独保存的记录，不给模型的五字段输出增加字段。记录绑定源运行、原始回答、证据和选定判据，列出原文引句、支持／无据／未知判断、证据 ID、具体理由及完整性声明。程序校验绑定、引文、引用与完整性，并依据显式复核意见组合门禁；不会用关键词替代语义判断。通过记录仍标为 `agent_checked`，不自动提升为人工金标。操作入口均不调用模型：
 
-```bash
-python3 -B evals/ci-self-healing/review_chrys.py prepare \
-  --suite /absolute/path/to/eval-suite --trial trial-XXXXXXXXXXXX \
-  --output /absolute/path/to/new-native-review \
-  --profile-id ACTUAL_PROFILE_ID --endpoint-host gateway.example.invalid \
-  --chrys-version ACTUAL_CHRYS_VERSION
+```sh
+python3 -B eval.py calibration-gate --run /absolute/path/calibration --output /absolute/path/new-pending-gate
+python3 -B eval.py calibration-gate --run /absolute/path/calibration --audit /absolute/path/rationale-audit.json --output /absolute/path/new-reviewed-gate
+python3 -B eval.py calibration-gate-report --gate /absolute/path/new-reviewed-gate
 ```
 
-这里声明已选 `huoshan-glm5.3` 的 profile ID、HTTPS 网关主机名与实际 Chrys 版本；这些值不是凭据，也不是运行成功证明。准备结果包含 `input/task.txt`、`input/packet.json`、`input/schema.json`、`binding.json` 和 `invocation.json`。后者仅保存计划的原生 CLI 参数，`models_called=false` 表示准备阶段未调用模型。
+第一次调用生成待填的 `audit-template.json`，缺少理由复核时退出码为 2。填写记录后用新目录生成门禁；有明确不通过项时退出码为 1。消费门禁前使用 `calibration-gate-report` 或 `harness.calibration_gate.read_gate()` 重新校验来源、实现和封存；六份全部满足三项条件才有 `phase2_permitted: true`。该标志只表示校准条件满足，不启动第二阶段，也不代替真实调用预算授权。
 
-真正执行仍使用 `chrys run --agent QA --model huoshan-glm5.3 --task ... --workdir ... --json --quiet`，由另行获准的受控执行器提供文件/网络边界、时限、会话存储目录和进程回执。`--workdir` 不是沙箱，`--model` 是后备选择，QA 也可能被用户 profile 覆盖；必须核对实际会话。原生路径不继承 HTTP 适配器的无工具、禁止压缩、token 上限或网络保证。不要为审计打开可能记录凭据的原始 HTTP 日志。
+Q20 冻结回放命令为 `python3 -B tests/replay_calibration_gate.py --source runs/q19-two-stage-20261117/phase1 --output /absolute/path/new-gate-replay`。原始六份中两份满足标准、两份关键理由无据、两份协议无效，故门禁保持未放行；回归脚本因准确识别这些情况而通过。详见[Q20 放行检查记录](<../../10_Projects/CI 自愈研究与方案/Experiments/2026-11-17-Q20评审理由与校准放行检查.md>)。
 
-执行器捕获 CLI 原始 stdout、真实进程状态（`status`、`returncode`、`duration_seconds`）及原生 `session.json` 后收集：
+Java 模板与验收代码也进入实现摘要和快照。目标行为与旧接口兼容性使用独立 Oracle，分别判分；旧合并 Oracle 的失败不能拆解归因为其中某一项失败。历史证据与原评分保持原样。
 
-```bash
-python3 -B evals/ci-self-healing/review_chrys.py collect \
-  --directory /absolute/path/to/new-native-review \
-  --stdout /absolute/path/to/execution/stdout.log \
-  --process-file /absolute/path/to/execution/process.json \
-  --session-file /absolute/path/to/native/session.json
+判据按适用性与证据分别记录：适用且满足为 pass，有明确反证为 fail，缺证为 inconclusive；not_applicable 必须有依据。机会没有发生不能记为已经覆盖。整体 verdict 与 Skill 的 `local_verified/repair_advised/unresolved` 分开。
+
+CLI 退出码：0 通过或纯计划，1 已观察到失败，2 未完成/环境或证据缺口。报告输出 `summary.json` 和 `summary.md`；`report` 先核对保存的证据摘要，证据漂移时拒绝复用旧结论。
+
+最终机器可读结果是 stdout 中的单个 JSON；执行进度和测试日志写到 stderr。
+
+已有证据可独立复核，输出必须是源运行之外的新目录：
+
+```sh
+python3 -B evals/ci-self-healing/eval.py grade --run /absolute/path/run --output /absolute/path/new-assessment
+python3 -B evals/ci-self-healing/eval.py review --trial /absolute/path/run/trials/t0001 --runtime /absolute/path/runtime.json --output /absolute/path/new-review
 ```
 
-收集到 `collected/`：原样保留 stdout 和公开 `result.txt`，回执只摘取必要元数据，不复制 session 的思维链、工具参数或任意内部属性。缺少会话、模型/网关不匹配、额外上下文、工具调用、压缩、输入漂移或输出不合规均明确记录；缺失记录用 `null`，不能当成“零调用”。输入、提示词、输出及会话文件用摘要关联，不截断证据，不自动补字段、去围栏或重试到通过。已有收集目录拒绝覆盖。
+`grade` 重算程序项并明确标注复用的既有语义意见，不调用模型。`review` 默认只生成计划；明确追加 `--execute-live` 才启动一次新评审，最多 900 秒，不重跑被测 Agent、不覆盖原结果。这类后续复评需要单独预算，不属于本次 6＋16 次首次验收预算。
 
-回执分开表达：
+针对首次真实评审发现的三类问题，新增独立的[证据语义校准组](fixtures/calibration/evidence-semantics-v1/README.md)：目标依据、宿主事后验证、最终版本读回，各一对正反例。`calibrate --suite evidence-semantics-v1 --prepare-only --output /absolute/path/new-prepared-calibration` 只准备冻结证据、无预标签提示及单独标签清单，不需 runtime、不调用模型。原组 `initial-v1` 保留为默认；新组预标同样是 `agent_checked`，不称真实校准已通过。准备目录不能直接覆盖为真实运行目录。
 
-- `model_verdict`：模型原本声称的 `pass/fail/incomplete`。
-- `output_status`：该公开结果是否满足字段、证据和时序合同。格式无效不等于自愈方向错误。
-- `gaps`：执行/会话核对的缺口；`call_record_gaps`：未收集的服务端模型回执、完整请求/重试历史。客户端绑定不冒充服务端身份。
-- `formal_evaluation_status`：此轻量收集入口保持 `incomplete`，`collect` 返回退出码 2，不写 trial 的 `review.json` 或升级 suite 分数。即使公开结果有效，也仅供人工复核；不是已实现正式原生评审自动验收。
+`required-verification-v1` 用六份固定证据同时检查“必要验证”和“结果码”两项判据，覆盖静态推演、实际执行、复用、候选失效、宿主事后验证和观察缺口。运行 `calibrate --suite required-verification-v1 --prepare-only --output <新目录>` 可检查盲评材料及独立保存的预标签。离线 `grade` 在每个 trial 的 `check_differences` 中列出判分或适用性变化，语义项沿用冻结评审。
 
-历史失败输出保持原样，可离线回放检验校验器；新提示词需要另建评审目录。重新调用模型须明确执行，不能以“格式修复”为由修改旧判定或覆盖旧证据。新的 `test` / `native_runner.py` 另行采集原生 exchange 并接入严格验收；不会倒改本轻量收集器或自动把历史 incomplete 升级为通过。
+`grade --check-review-evidence` 用当前程序复核历史评审引用，结果写入指定的新目录。已知契约的 Java 路由修复交付 `local_verified` 时，若两项语义通过只引用普通编译、源码、格式校验或宿主事后检查等证据，程序将相应单项记为 `inconclusive`，并在 `judge_opinion` 保存原始意见。新评审的结果接收环节默认执行同一检查。引用其他行为检查或既有收据时，覆盖范围和有效性继续由语义评审判断。
 
-## 一次试次做什么
+历史评分、原始轨迹及对应快照随各自的运行目录保存。审阅旧实验时使用该次冻结的实现、工具配置和证据。现行用例与原始素材的对应关系见 [legacy-case-map.json](spec/legacy-case-map.json)。
 
-1. 固定 Skill 内容摘要、案例 Git 历史、介入时文件和未跟踪的 Job 文件；两种 Skill 版本得到等价但独立的现场。
-2. 在无网络沙箱副本中实际运行原 Maven 命令和 javac。必须确认 Feature 的参数不匹配，而非工具/依赖失败，才能启动模型。真实日志再写入现场，不使用伪造日志。
-3. 默认通过本机 Chrys CLI 入口执行 GLM 5.2 自愈，每个试次限定自己的可写现场、运行配置和会话目录。Skill 的只读快照位于本次 `runtime/skills/ci-self-healing`，发现路径和任务提示一致；不全局安装、不暴露评分答案。
-4. 启动模型前，在无网络沙箱调用 Chrys 原生 Skill 发现、`load_skill`、资源读取和内置搜索；失败记 `preflight_failed`，不启动模型、不用普通文件读取降级掩盖接入错误。正式会话还通过公开事件核对实际 Skill 名称和来源。观察公开消息、工具结果及文件边界状态，用 Session 元数据核对请求模型 ID。`run --json` 的最终回答不是完整轨迹。
-5. 结束后独立检查文件和 Git HEAD。在另一无网络沙箱中对候选副本运行 Maven、直接 javac 和隐藏行为 Oracle；不在提交现场构建，不改变 Agent 已交付的工作空间。旧 Docker 后端执行相同逻辑但使用独立容器。
-6. 使用评测器独立保存的 `contracts/v1` 报告合同快照检查格式，不自动采用 after Skill 中的校验器；修改合同需单独审核并升级评测版本。再将不含版本标签/执行模型身份的文件、公开事件、确定性结果发给 suite 绑定的评审模型（默认 GLM 5.3）。评审必须引用真实证据 ID；工具调用、缺失事件、格式错误、伪造引用和前后矛盾均不能算评审通过。
-7. 按 before/after、案例、重复次数汇总 passed/failed/incomplete/not_run。确定性失败不能被评审覆盖；缺少语义评审不能算通过。结果只证明这一组模型/宿主/Skill/案例配置的样本表现。
+## 参考
 
-清单交付合同由冻结 Skill 的 `assets/delivery-resources.json` 选择：`stop-artifact-v2` 保留历史逻辑仓库名规则，`stop-artifact-v3` 要求 `repo` 等于实际 Git root 的 basename。当前用例特意保留项目名 `routing-feature` 与 Git root 目录名 `sourcecode` 的差异，v3 只接受后者。两版都要求报告与清单完整交付、条目匹配最终源码差异，无净修改时 `changes: []`；JSON 文件版本仍为 `"0.1"`，共用独立冻结的 `contracts/file-change-v1` 格式校验器。v1 旧报告合同及历史运行记录保持原样，旧 v2 通过不能证明符合调度器的 basename 匹配要求。
-
-## 自愈会话留存、超时与排障
-
-新的运行合同为 `repair-runtime-v2`；只影响新 suite。旧记录保留原样，改过框架、镜像、profile 或任务路径后应重新 prepare，不在旧批次内续跑或覆盖证据。
-
-- 每个 trial 的 `native-session/` 以权限 0700 创建，`CHRYS_SESSION_ROOT_DIR` 指向该宿主位置，超时不会删除已落盘记录。它不属于 `visible/` 源码现场，不参与 Patch／清理评分，也不暴露其他 session。旧 Docker 后端将同一目录单独挂到 `/artifacts/native-session`。
-- 原生会话是私有诊断材料，可能含内部消息；不自动发送给评审、不打印或提交。`session-receipt.json` 仅记录文件摘要、有限身份元数据和完整性缺口；评分及续跑校验其绑定。正常退出、超时或中断都尽力生成该回执。只能保证已落盘文件不随容器清理消失，不能保证强杀前尚未写入的消息被保存；缺失、部分 JSON、符号链接、身份不符均不能当作完整记录。
-- 模型实际收到的提示保存在只读 `adapter/task.txt`，由原任务加统一预算提示构成，摘要写入 `run.json`。按本次有效剩余预算告知 UTC 硬截止，预留最多 60 秒（通常为预算的 20%）收尾；不包含案例答案。预留是 Agent 可见约定，不保证其遵守，不会延期、自动重试或替 Agent 编造 `analysis-fix.md`。硬截止仍由宿主执行，超时仍为 incomplete。
-- 公开轨迹增加 `transport.*`：仅记录 HTTPX 调用序号、单调时钟耗时、状态码、响应首字节／流结束和字节数、异常类型；不读取或记录 URL、Header、请求／响应正文。它用于区分工具耗时与传输等待，不证明服务端推理耗时；SDK 内部重试未必逐次可见，预缓冲响应也不会被伪装成完整流计时。
-- `doctor` 检查 Chrys 实际选择的搜索二进制及原生接口；本机执行显式使用配置中的工具路径，不自动修改安装。旧 Docker 后端仍需自行准备兼容镜像，与默认本机路径无关。
-
-## 判定与覆盖边界
-
-- 不以精确 Patch 或增删行数为标准。保持契约案例验证任意输入仍返回基础结果；扩展案例验证三个参数均影响结果且保留兼容入口。证据不足案例允许独立获准实验，但不得遗留依赖未决选择的语义候选。
-- 准入消息的内容允许自由表达；脚本不靠匹配“allow”单词证明有充分依据。评审模型判断事件是否构成有效准入及候选/实验归属，脚本再检查其引用存在性和时序。v1 的自动通过只接受可归属 Agent 的公开消息；Skill 允许的文件/工具日志式准入仍合法，但本版无法可靠区分自主发布记录与读取外部材料，记为 incomplete、待人工复核，不因此判执行违规。
-- 观察器只覆盖公共事件和工具边界快照，不是不可绕过的系统调用审计；单个工具内部先改后恢复、任意外部后台进程及恶意篡改观察器不在确定性证明范围。评审须检查命令，不透明行为影响结论时记 incomplete。
-- Chrys 观察器按 CLI 入口、异步事件发布签名和所需事件字段检查兼容性，不按版本号放行或拒绝。原生 Skill／搜索接口仍须实际预检；所选版本接口不兼容时报告环境缺口，不静默跳过观察或降级。宿主统一追加预算提示，观察器采集事件、检查注册并记录传输计时；不选择修复方向，但会增加采集耗时。真实试跑需要核查事件覆盖。缺失/未配对事件和模型身份缺口不算通过。
-- 本版三个案例采用无交互 CI Job 场景，报告目录正常可写。文字降级报告、复杂多对象分类、交互暂停恢复等未做端到端判定；缺少文件报告时保留缺口，不猜测合规。
-- 验证器与候选隔离，且源码、非 index Git 元数据、执行证据改变后拒绝复用旧结果；同一 suite 绑定后端、实际工具版本、专用缓存摘要、profile 内容摘要、请求模型和预算，旧 Docker 后端还绑定镜像和网络。Git index 的 stat 刷新被排除，未声称验证所有 index 语义。语义评审提示是防混淆指引，不是安全沙箱。Codex 用工具会使本次盲审失效；应使用受控评审环境，CLI 自身仍需要认证。
-- 轨迹输出可能包含模型生成的任意文本。仅使用本仓合成材料，凭据只作环境注入；观察器替换已注入的测试密钥，但不能保证任意编码后的秘密被识别。不要把未经检查的运行目录提交或上传。
-
-## 执行资源布局版本
-
-执行审计按冻结包的 `assets/execution-resources.json` 选择资源合同，当前布局使用 `skill-execution-v6`，已声明 v3/v4/v5 的旧包继续使用原版本；更早的无声明旧包选择 v2。新入口引用拆分资源却缺少布局声明、声明未知或损坏时拒绝降级。已保存运行始终按自身记录的 v1/v2/v3/v4/v5/v6 合同复核，不改写历史试次。
-
-v3 保持 v2 的准入/清理证据及恢复判据，只调整动作前的文档读取要求：候选源码写入前完整读取诊断、修复依据和准入指南；正常构建读取清理指南；已观察到基准时序违规后，重新采集前读取恢复指南。停在只读阶段不要求候选或清理分支。全文读取、原生工具来源、候选/范围绑定、恢复后重验及最终无漂移要求保持。脚本检测范围仍限于现有合成 Java 现场及直接 Maven/javac 构建，不宣称工具层强制隔离或所有语言的动作识别。
-
-v4 继承上述要求，在观察到的 Java 源码变化和直接构建前增加固定 `enterprise-policy.md` 完整读取门槛，并在构建前检查 `candidate-verification.md`。策略未读/缺失不作为未配置，事后补读不抹去违规。只读停止不强制加载执行分支。策略适用性、候选与实验意图、候选修改前新指南及失败/协作指南的条件读取仍由语义评审核对；确定性审计是事后证据检查，不是写入前工具拦截，不解析策略自然语言来自动授权。
-
-v5 继承 v4，在合成现场的文件/搜索工具、显式引用 trial 可见根或 cwd 的 shell、已识别构建和非帮助 Skill 脚本前，检查 `invocation-inputs.md` 的完整原生读取结果。仅发出读取请求、截断或事后补读均不能追认先前访问；不改变参数解析语义。元数据工具与脚本帮助不触发该门槛。未知工具、shell 动态构造路径、参数实际解释、修复专用合同适用性和停止是否充分仍由语义评审核对，不能把此门槛称为全工具拦截或全部指令遵从证明。无构建的停止不强制加载清理指南；已发生构建仍要求原有清理证据。多读指南只作为分支效率问题分析，不自动变成安全失败或从 token 数推断意图。
-
-v6 保留 v5 的参数、策略、候选验证和恢复清理门槛，将独立 `repair-basis.md` 合并到 `repair-and-verification.md`。新布局在候选源码写入前检查合并指南的完整读取，只读停止不增加修复资源要求；仅返回准入末节、截断或事后补读仍不满足门槛。v3/v4/v5 继续要求其冻结包中的独立依据资源，v5 的参数读取门槛也保持不变。
-
-评审摘录按同一合同选择章节：v1/v2/v3/v4/v5 保留各自原映射；v4 从候选验证、失败处理、协作和企业策略指南取得原文，v5 另外保留主入口的输入前置步骤与准入章节内的停止路由。缺失必需章节时报错，不默默丢弃语义判断或恢复条件；未完整读取的材料保持原样，未读材料不会凭空加入已读证据。v6 从合并指南中完整提取原有目标行为、修复位置、重要反证、语义歧义和完整候选缺口判据。五项评审结构保持不变。
-
-`runtime-diagnostics.json` 的 timing 增加可选 `native_tool_operations`：按原生 operation ID 配对，分别统计开始、结束、结果类型、未配对项和白名单工具的计数；涵盖公共工具结果遗漏的 `invalid_arguments`。缺原生记录为 null，未知结果/重复/不配对留缺口；不导出参数、原始报错、任意工具名或私有推理，也不把 dispatch success 当语义正确。公共 `tool_results` 保留原口径。原生预检增加合成报告完整读回及数组/字符串参数正反例，不启动模型或自动修正模型参数。
-
-## 验证框架自身
-
-`tests/test_batch.py` 用明确标注的假后端自动验证整套重复运行、断点续跑、单例失败隔离、预算/共享故障停止、证据漂移与新增用例注册；它验证调度与防护，不证明模型遵守 Skill。原有测试覆盖 fixture、观察器、确定性评分和评审合同。离线测试通过、容器构建通过、真实模型行为通过是三种不同证据，不能互相替代。真实验收必须保留新批次的 summary 和原始回执，不复用旧单例结论代替整套结果。
-
-`tests/test_parallel_batch.py` 使用线程屏障证明三个试次实际重叠执行，并通过本地子进程验证协调器取消、清理回执、会话总预算、未知预留不重放、同一试次阶段顺序和汇总时序。共享绑定竞争、线程预算隔离以及新冻结默认值也有离线测试；这些测试不启动模型、不读取真实 profile。
-
-实现参考：[Codex 非交互命令](https://learn.chatgpt.com/docs/developer-commands#codex-exec)、[Agent 执行轨迹评测](https://developers.openai.com/api/docs/guides/agent-evals)。具体 CLI 能力以被记录的本机版本为准。
-
-GLM 适配器使用兼容 Responses 的 [`text.format` 结构](https://developers.openai.com/api/docs/guides/structured-outputs)，兼容服务是否遵循该格式须实测，不由 OpenAI 文档替其保证。
-
-## 本次资源清理
-
-新原生执行使用 `owned-resource-cleanup-v1`，只回收当前宿主独占创建并登记的目录，不扫描或清理历史 `runs/`。源码仍由 Skill 的候选基准与 `workspace_check.py` 校验；宿主收尾不修改 `visible/`，也不替 Agent 补造源码清理成功。
-
-- 独立构建把实际源码、Oracle、构建脚本/配置、缓存来源清单和命令保存到同级 `*-evidence/`，日志保留在原 `baseline-build/`、`candidate-build/`。只有进程组退出、保留清单落盘并读回后，才回收本次 `*-workspace/`。
-- 当前 Java/Maven 用例显式选择 `maven_clean_plan`，在安全的独立副本中调用固定 `maven-clean-plugin:3.2.0:clean`，使用同一沙箱、离线缓存与配置，关闭 fast clean、显式启用错误返回并限制时长。缓存缺插件时记录 skipped；执行失败保留其日志。随后仍由宿主清理登记目录并复核不存在，不将 clean 退出码当作完整性证明。旧缓存不自动联网补全；新环境显式 `--warm-cache` 才准备插件及依赖。
-- 修复阶段回收本次 `runtime/tmp`、`runtime/java-home`、`runtime/m2`，保留共享原始缓存、实际配置、Skill、任务、会话/轨迹及诊断。评审阶段只回收本次专用 `tmp`，保留完整评审输入和会话证据。既存目录不接管为可删除内容。
-- `resource-cleanup/<stage>/` 保存创建意图、目录身份、保留清单与最终回执。`cleaned` 表示该声明范围回收且保留证据复核通过；`incomplete` 保留失败/残留；未创建资源为 `not_applicable`。回执绑定进入运行、验证、评审及汇总，清理未完成不允许整次 passed，原始编译、超时或评审结果仍保留。
-- 部分初始化和异常退出经 context 收尾；缺少进程退出证据时不盲删。强杀宿主可能只留下创建记录，需后续人工核对；当前没有按历史目录猜测归属的自动恢复入口。文件回收预算有界，不能处理仍在写入或身份已被替换的目录。
-
-离线验证：普通框架测试包含真实临时文件系统、故障注入和构建接入测试；真实工具链集成使用隔离缓存及 Maven 离线模式，不调用模型。历史版本没有该收据时保留原判据，不追溯升级其清理结论。
-
-### 通用原生清理接口与语言边界
-
-`native_clean.NativeCleanPlan` 由宿主按实际构建上下文构造：记录构建系统、完整 argv、cwd、经清理的原构建环境、离线前置文件及有界超时。`clean_build(..., plan=...)` 只在本次登记的独占工作空间中运行该计划，命令和工作目录不被改写；没有已确认计划则跳过原生命令，仍可执行通用目录回收。入口不根据扩展名或存在 pom.xml 推断工具，不默认回退 Maven，也不把 shell 命令字符串直接执行。
-
-沙箱可通过 `build_tools` 复用已确认的非 Java 工具安装路径，无需 Maven/JDK 配置，写入仍仅限本次独占目录，网络仍关闭。Make、CMake、Cargo、Gradle、Go、.NET、包管理器脚本或其他项目任务均可提供同一结构的计划；这表示执行接口不限定语言，不代表这些工具的版本、脚本语义与完整自愈场景已全部验收。当前三个模型修复用例仍是 Java/Maven，不将它们的结果扩展到其他语言。
-
-新增测试区分通用参数传递和真实工具运行：`test_native_clean_plan.py` 的无模型合成测试核对不同构建系统的原命令/环境、无 clean 情况及范围拒绝；`CI_CLEANUP_TEST_NON_JAVA=1` 启用 macOS 沙箱内真实 C/Make 构建清理、Python 字节码/项目清理任务和越界删除阻止验证。真实 Maven 集成仍使用显式离线缓存变量。未安装的构建工具不下载或冒充已验证。
-
-## 流水线三结果报告的定向回归
-
-当前交付声明 `stop-artifact-v6` 绑定冻结的 `contracts/v3` 报告合同：正式报告只接受修复请求、`local_verify` 和唯一的 `local_verified`、`repair_advised`、`unresolved`。原 `not_applicable` 合并到 `unresolved`，禁修、范围外、信息不足和尝试失败等原因在正文分别保留。`stop-artifact-v5` 继续绑定四结果 v2，更早声明保持 v1。混合比较在 `suite.json` 逐 Skill 版本记录 `report_contracts`，分别复制宿主校验器和模板；候选不能替换或降级自己的判据。冻结 v1/v2 合同与旧批次不改写。
-
-默认三用例保持不变。定向覆盖可选择 `case-001,case-003,outcome-advised,outcome-not-applicable`：后两例均明确禁修，分别提供充分修复契约和未决目标。保留旧用例 ID `outcome-not-applicable`，其 v3 预期为 `unresolved`，v2 仍为 `not_applicable`；这是历史合同映射，不代表新增结果码。一次四场景 smoke 为 4 次自愈和最多 4 次独立评审，按既有批次预算执行。
-
-额外样例 `outcome-case-adapted` 与 `outcome-case-unconfirmed` 使用相同的随 MR 提供的历史案例原文。前者给出当前明确契约且禁止本轮实施，评审应核对是否交付适用于本仓的明确方案；后者的当前目标未定且没有禁令，历史成功不能代替当前依据，预期为 `unresolved`。它们只检验已有案例材料的适用性与结果边界，不模拟或证明真实案例库检索；按需显式选择，不追加到默认批次。预期枚举只提供给宿主评测及独立评审，不放入被测任务材料。
-
-`outcome-case-unconfirmed-blocked` 与 `outcome-case-adapted` 固定相同禁令和历史材料，只改变当前目标是否明确；`outcome-case-counterevidence` 则给出与历史改法冲突的明确当前契约，要求交付符合当前契约的方案。三者仍使用相同源码，不因结果分类变化解除禁令。完整的 8 场景输入、逐例验收与建议分批见[真实 Agent 用例评审稿](<../../10_Projects/CI 自愈研究与方案/Experiments/2026-10-31-三结果真实Agent用例评审稿.md>)；材料已生成不表示模型已经执行。
-
-报告评审区分人工补齐决定修法的信息、人工执行已有据的方案，以及案例线索与已核对的适配方案；同一 `unresolved` 下的停止原因仍须如实保留。结构校验仅保证枚举、范围与报告格式，不从“人工”“案例”等关键词推断语义。离线夹具和格式测试不证明真实 Agent 遵从；真实批次需另行明确模型、次数和时间预算，使用新冻结目录及 `--execute-live`。
+- [OpenAI：Testing Agent Skills Systematically with Evals](https://developers.openai.com/blog/eval-skills)：公开轨迹、确定性检查和结构化评审。
+- [Google：How we ship Google Agent Skills like products](https://cloud.google.com/blog/topics/developers-practitioners/behind-the-scenes-two-months-later-how-we-ship-google-agent-skills-like-products)：原子判据、用例质量门禁和版本证据。
+- [Anthropic skill-creator](https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md)：新版与旧版回归、有无 Skill 增益比较的区分。

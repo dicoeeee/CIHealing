@@ -1,0 +1,1 @@
+本特性新增 Router.route(payload, condition, slot)，返回 <condition>:<slot>:<payload>，三项输入均影响结果；Feature.apply 使用新行为。保留旧 Router.route(payload) 兼容入口，仍返回 base:<payload>。接口、实现和调用方同属本次特性。

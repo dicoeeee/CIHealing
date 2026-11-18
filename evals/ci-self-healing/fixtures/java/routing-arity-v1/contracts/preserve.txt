@@ -1,0 +1,1 @@
+本特性的 condition 和 slot 仅用于上层审计，不改变路由结果。已发布的 Router.route(payload) 接口必须保留，本次不增加路由接口参数。Feature.apply 对任意 condition/slot 返回 base:<payload>。

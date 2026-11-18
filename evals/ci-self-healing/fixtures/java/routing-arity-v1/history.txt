@@ -1,0 +1,1 @@
+历史案例 H1，来源 synthetic-routing，版本 1，原文 https://cases.invalid/H1。旧项目明确约定 condition/slot 仅用于审计；将 LegacyFeature.java 的三参数调用改为单参数调用后，编译和旧项目行为检查通过。该记录描述旧项目，当前目标以本 MR 有效资料为准。
