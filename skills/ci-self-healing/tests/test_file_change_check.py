@@ -144,11 +144,17 @@ class FileChangeCheckTests(unittest.TestCase):
             b'{"version":"0.1","changes":[{"file":"a","file":"b"}]}',
             b'{"version":"0.1","changes":[],"extra":NaN}',
             b'{"version":"0.1","changes":[],"extra":Infinity}',
-            b'[' * 2000 + b']' * 2000,
         ]
         for data in inputs:
             with self.subTest(data=data[:60]):
                 self.assertEqual(check.validate(data)[0]["code"], "invalid_json")
+
+    def test_deep_nonobject_json_is_rejected_across_parser_versions(self):
+        # This is valid JSON. Some Python parsers reach their nesting limit;
+        # others parse it and reject the non-object root. Neither may accept it.
+        errors = check.validate(b'[' * 2000 + b']' * 2000)
+        self.assertTrue(errors)
+        self.assertIn(errors[0]["code"], {"invalid_json", "object_required"})
 
     def test_escaped_unpaired_surrogate_is_invalid_text(self):
         data = json.dumps({**BASE, "changes": [{**ENTRY, "desc": "\ud800"}]}).encode()
